@@ -1,0 +1,7 @@
+#ACTION=="add", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1908", ATTRS{idProduct}=="0102", RUN=="/usr/local/bin/lcd4linux -F -f /etc/lcd4linux/axlcd4linux.conf"
+#ACTION=="unbind", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1908", ATTRS{idProduct}=="0102", RUN=="killall -s 9 lcd4linux"
+#ACTION=="remove", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1908", ATTRS{idProduct}=="0102", RUN=="killall -s 9 lcd4linux"
+#
+ACTION=="add", SUBSYSTEMS=="usb", ENV{PRODUCT}=="1908/102/200", RUN=="/bin/systemctl enable --now  axlcd4linux.service"
+#ACTION=="unbind", SUBSYSTEMS=="usb", ENV{PRODUCT}=="1908/102/200", RUN=="/bin/systemctl disable --now  axlcd4linux.service"
+ACTION=="remove", SUBSYSTEMS=="usb", ENV{PRODUCT}=="1908/102/200", RUN=="/bin/systemctl disable --now  axlcd4linux.service"

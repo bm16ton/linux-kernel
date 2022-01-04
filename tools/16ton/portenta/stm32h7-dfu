@@ -1,0 +1,9 @@
+#!/bin/bash
+PORT=$(listSerialC | grep Envie | awk '{print $1}')
+#echo $PORT
+stty -F $PORT 1200
+stty -F $PORT 1200
+stty -F $PORT 1200
+stty -F $PORT 1200
+sleep 1.5
+/usr/bin/dfu-util --device 0x2341:0x035b -D $1 -a0 --dfuse-address 0x08040000

@@ -1,0 +1,15 @@
+compile listSerialPortsC
+
+cd listSerialPortsC
+
+./compile_linux.sh
+
+sudo cp listSerialC /usr/local/bin ; sudo chmod +x /usr/local/bin/listSerialC
+
+the dfu-util version here is from arduino-mbed and seems to work the best outa versions ive tried
+
+stm32h7-dfu-manual firmwarename.bin /dev/ttyACM0
+
+or auto
+
+stm32h7-dfu firmwarename.bin 
