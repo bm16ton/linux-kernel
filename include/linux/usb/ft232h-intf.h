@@ -54,6 +54,8 @@
 #define FTDI_USB_WRITE_TIMEOUT	5000
 
 /* Total number of MPSSE GPIOs: 4x GPIOL, 8x GPIOH, 1x CS on ADBUS3 */
+//#define FTDI_MPSSE_GPIOS	13
+
 #define FTDI_MPSSE_GPIOS	5
 
 /* MPSSE bitbang modes (copied from libftdi) */

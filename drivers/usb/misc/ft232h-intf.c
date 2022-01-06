@@ -163,10 +163,8 @@ struct ft232h_intf_priv {
 	u8			gpiol_dir;
 	u8			gpioh_dir;
 	u8			tx_buf[4];
-//	int         irq_type[FTDI_MPSSE_GPIOS];
 	unsigned int offset;
 
-//	struct irq_domain *irq_sim_domain;
 
 };
 
@@ -944,8 +942,6 @@ static void ftdi_mpsse_gpio_set(struct gpio_chip *chip, unsigned int offset,
 	struct ft232h_intf_priv *priv = gpiochip_get_data(chip);
 	bool low;
 
-//	int irq, irq_type, ret = 0;
-//	int pin = irqd_to_hwirq(irqd);
 	mutex_lock(&priv->io_mutex);
 	if (!priv->intf) {
 		mutex_unlock(&priv->io_mutex);
@@ -1174,8 +1170,128 @@ static const struct ft232h_intf_ops ft232h_intf_ops = {
 	.set_latency = ftdi_set_latency,
 };
 
+/*
+ * FPGA config interface: FPP via FT245 FIFO
+ */
+#define FPP_INTF_DEVNAME	"ftdi-fifo-fpp-mgr"
 
+static struct dev_io_desc_data fpga_cfg_fpp_dev_io[2] = {
+	{ "nconfig", 0, GPIO_ACTIVE_LOW },
+	{ "conf_done", 1, GPIO_ACTIVE_HIGH },
+};
+
+static const struct fifo_fpp_mgr_platform_data fpga_cfg_fpp_plat_data = {
+	.ops = &ft232h_intf_ops,
+	.io_data = fpga_cfg_fpp_dev_io,
+	.io_data_len = ARRAY_SIZE(fpga_cfg_fpp_dev_io),
+	.nconfig_num = 8,
+	.conf_done_num = 9,
+};
+
+static int ft232h_intf_fpp_probe(struct usb_interface *intf,
+				 const void *plat_data)
+{
+	struct ft232h_intf_priv *priv = usb_get_intfdata(intf);
+	const struct fifo_fpp_mgr_platform_data *pd = plat_data;
+	struct device *dev = &intf->dev;
+	struct platform_device *pdev;
+	struct gpiod_lookup_table *lookup;
+	char *cfgdone, *ncfg, *ptr;
+	size_t lookup_size;
+	int i, ret, gpios = 0;
+
+	dev_dbg(dev, "%s: plat_data %p\n", __func__, pd);
+	if (!pd) {
+		dev_err(dev, "%s: Missing platform data\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = ft232h_intf_add_cbus_gpio(priv);
+	if (ret < 0)
+		return ret;
+
+	lookup_size = sizeof(*lookup) + 3 * sizeof(struct gpiod_lookup);
+	lookup = devm_kzalloc(dev, lookup_size, GFP_KERNEL);
+	if (!lookup)
+		return -ENOMEM;
+
+	lookup->dev_id = devm_kasprintf(dev, GFP_KERNEL, "%s.%d",
+					FPP_INTF_DEVNAME, priv->id);
+	if (!lookup->dev_id)
+		return -ENOMEM;
+
+	ncfg = devm_kasprintf(dev, GFP_KERNEL, "ACBUS%d", pd->nconfig_num);
+	if (!ncfg)
+		return -ENOMEM;
+
+	cfgdone = devm_kasprintf(dev, GFP_KERNEL, "ACBUS%d", pd->conf_done_num);
+	if (!cfgdone)
+		return -ENOMEM;
+
+	for (i = 0; i < priv->cbus_gpio.ngpio; i++) {
+		if (!priv->cbus_gpio.names[i])
+			continue;
+
+		ptr = strstr(priv->cbus_gpio.names[i], "ACBUS");
+		if (!ptr)
+			continue;
+
+		if (!strncmp(ptr, ncfg, 6)) {
+			lookup->table[0].chip_hwnum = i;
+			gpios++;
+			continue;
+		}
+		if (!strncmp(ptr, cfgdone, 6)) {
+			lookup->table[1].chip_hwnum = i;
+			gpios++;
+		}
+	}
+
+	/* Does GPIO controller provide all needed ACBUS pins? */
+	if (gpios < 2) {
+		dev_err(dev, "Missing control GPIOs\n");
+		return -ENODEV;
+	}
+
+	for (i = 0; i < pd->io_data_len; i++) {
+		lookup->table[i].key = priv->cbus_gpio.label;
+		lookup->table[i].idx = 0;
+		lookup->table[i].con_id = pd->io_data[i].con_id;
+		lookup->table[i].flags = pd->io_data[i].flags;
+	}
+
+	priv->lookup_fifo = lookup;
+	gpiod_add_lookup_table(priv->lookup_fifo);
+
+	pdev = platform_device_register_data(dev, FPP_INTF_DEVNAME,
+					     priv->id, pd, sizeof(*pd));
+	if (IS_ERR(pdev)) {
+		gpiod_remove_lookup_table(priv->lookup_fifo);
+		return PTR_ERR(pdev);
+	}
+
+	priv->fifo_pdev = pdev;
+
+	dev_dbg(dev, "%s: fifo pdev %p\n", __func__, pdev);
+	return 0;
+}
+
+static int ft232h_intf_fpp_remove(struct usb_interface *intf)
+{
+	struct ft232h_intf_priv *priv = usb_get_intfdata(intf);
+	struct device *dev = &intf->dev;
+
+	dev_dbg(dev, "%s\n", __func__);
+	platform_device_unregister(priv->fifo_pdev);
+	gpiod_remove_lookup_table(priv->lookup_fifo);
+	return 0;
+}
+
+/*
+ * FPGA config interface: PS-SPI via MPSSE
+ */
 #define SPI_INTF_DEVNAME	"ftdi-mpsse-spi"
+
 
 static struct dev_io_desc_data ftdi_spi_bus_dev_io[] = {
 	{ "dc", 1, GPIO_ACTIVE_HIGH },
@@ -1217,9 +1333,9 @@ static const struct software_node ili9341_node = {
 static struct spi_board_info ftdi_spi_bus_info[] = {
     {
 //    .modalias	= "yx240qv29",
-//	.modalias	= "ili9341",
+	.modalias	= "ili9341",
 //	.modalias	= "mcp251x",
-	.modalias	= "spidev",
+//	.modalias	= "spidev",
     .mode		= SPI_MODE_0,
     .max_speed_hz	= 32000000,
     .bus_num	= 0,
@@ -1238,7 +1354,7 @@ static struct spi_board_info ftdi_spi_bus_info[] = {
 */
     .platform_data	= ftdi_spi_dev_data,
 // 	.properties	= mcp251x_properties,
-//	.swnode  =  &ili9341_node,
+	.swnode  =  &ili9341_node,
     },
    {
 //    .modalias	= "spidev",
@@ -1257,6 +1373,36 @@ static const struct mpsse_spi_platform_data ftdi_spi_bus_plat_data = {
     .spi_info_len	= ARRAY_SIZE(ftdi_spi_bus_info),
 };
 
+static struct dev_io_desc_data fpga_cfg_spi_dev_io[3] = {
+	{ "confd", 1, GPIO_ACTIVE_HIGH },
+	{ "nstat", 2, GPIO_ACTIVE_LOW },
+	{ "nconfig", 3, GPIO_ACTIVE_LOW },
+};
+
+static const struct mpsse_spi_dev_data fpga_spi_dev_data[] = {
+	{
+	.magic		= FTDI_MPSSE_IO_DESC_MAGIC,
+	.desc		= fpga_cfg_fpp_dev_io,
+	.desc_len	= ARRAY_SIZE(fpga_cfg_spi_dev_io),
+	},
+};
+
+static struct spi_board_info fpga_cfg_spi_info[] = {
+	{
+	.modalias	= "fpga-passive-serial",
+	.mode		= SPI_MODE_0 | SPI_LSB_FIRST,
+	.max_speed_hz	= 30000000,
+	.bus_num	= 0,
+	.chip_select	= 0,
+	.platform_data	= fpga_spi_dev_data,
+	},
+};
+
+static const struct mpsse_spi_platform_data fpga_cfg_spi_plat_data = {
+	.ops		= &ft232h_intf_ops,
+	.spi_info	= fpga_cfg_spi_info,
+	.spi_info_len	= ARRAY_SIZE(fpga_cfg_spi_info),
+};
 
 static struct platform_device *mpsse_dev_register(struct ft232h_intf_priv *priv,
 				const struct mpsse_spi_platform_data *pd)
@@ -1375,6 +1521,18 @@ static const struct ft232h_intf_info ftdi_spi_bus_intf_info = {
     .plat_data  = &ftdi_spi_bus_plat_data,
 };
 
+static const struct ft232h_intf_info fpga_cfg_spi_intf_info = {
+	.probe  = ft232h_intf_spi_probe,
+	.remove  = ft232h_intf_spi_remove,
+	.plat_data  = &fpga_cfg_spi_plat_data,
+};
+
+static const struct ft232h_intf_info fpga_cfg_fifo_intf_info = {
+	.probe = ft232h_intf_fpp_probe,
+	.remove = ft232h_intf_fpp_remove,
+	.plat_data = &fpga_cfg_fpp_plat_data,
+};
+
 static int ft232h_intf_probe(struct usb_interface *intf,
 			     const struct usb_device_id *id)
 {
@@ -1460,8 +1618,6 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 	struct ft232h_intf_priv *priv = usb_get_intfdata(intf);
 	const struct ft232h_intf_info *info;
 
-//	free_irq(GPIO_irqNumber,NULL);
-
 	info = (struct ft232h_intf_info *)priv->usb_dev_id->driver_info;
 	if (info && info->remove)
 		info->remove(intf);
@@ -1489,13 +1645,13 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 #define ARRI_SPI_INTF_PRODUCT_ID	0x7149
 
 static struct usb_device_id ft232h_intf_table[] = {
-/*	{ USB_DEVICE(FTDI_VID, ARRI_FPP_INTF_PRODUCT_ID),
+	{ USB_DEVICE(FTDI_VID, 0x6010),
 		.driver_info = (kernel_ulong_t)&fpga_cfg_fifo_intf_info },
 	{ USB_DEVICE(FTDI_VID, ARRI_SPI_INTF_PRODUCT_ID),
-		.driver_info = (kernel_ulong_t)&fpga_cfg_spi_intf_info }, */
+		.driver_info = (kernel_ulong_t)&fpga_cfg_spi_intf_info },
+//	{ USB_DEVICE(FTDI_VID, 0x6011),
+//        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6011),
-        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
-	{ USB_DEVICE(FTDI_VID, 0x6010),
         .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{}
 };
