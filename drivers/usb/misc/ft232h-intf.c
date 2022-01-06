@@ -111,7 +111,6 @@
 #include <linux/gpio.h> //16ton
 #include <linux/gpio/driver.h>
 #include <linux/gpio/machine.h>
-#include <linux/gpio/consumer.h> //16ton
 #include <linux/idr.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
@@ -123,6 +122,10 @@
 //16ton
 #include <linux/property.h>
 #include <linux/interrupt.h>
+
+int usb_wait_msec = 0;
+module_param(usb_wait_msec, int, S_IRUSR | S_IWUSR);
+MODULE_PARM_DESC(usb_wait_msec, "Wait after USB transfer in msec");
 
 struct ft232h_intf_priv {
 	struct usb_interface	*intf;
@@ -143,6 +146,10 @@ struct ft232h_intf_priv {
 	struct platform_device		*spi_pdev;
 	struct gpiod_lookup_table	*lookup_fifo;
 	struct gpiod_lookup_table	*lookup_cs;
+	struct gpiod_lookup_table	*lookup_dc;
+	struct gpiod_lookup_table	*lookup_reset;
+	struct gpiod_lookup_table	*lookup_interrupts;
+
 	struct gpio_chip	cbus_gpio;
 	const char		*cbus_gpio_names[4];
 	u8			cbus_pin_offsets[4];
@@ -156,6 +163,11 @@ struct ft232h_intf_priv {
 	u8			gpiol_dir;
 	u8			gpioh_dir;
 	u8			tx_buf[4];
+//	int         irq_type[FTDI_MPSSE_GPIOS];
+	unsigned int offset;
+
+//	struct irq_domain *irq_sim_domain;
+
 };
 
 /* Device info struct used for device specific init. */
@@ -332,6 +344,9 @@ static int ftdi_bulk_xfer(struct usb_interface *intf, struct bulk_desc *desc)
 
 exit:
 	mutex_unlock(&priv->io_mutex);
+	if (usb_wait_msec > 0) {
+		usleep_range(usb_wait_msec * 1000, usb_wait_msec * 1000 + 1000);
+	}
 	return ret;
 }
 
@@ -368,6 +383,92 @@ static int ftdi_set_baudrate(struct usb_interface *intf, int baudrate)
 	ret = ftdi_ctrl_xfer(intf, &desc);
 	if (ret < 0) {
 		dev_dbg(&intf->dev, "failed to set baudrate: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int ftdi_set_clock(struct usb_interface *intf, int clock_freq_hz)
+{
+	struct ft232h_intf_priv *priv = usb_get_intfdata(intf);
+	struct bulk_desc desc;
+	uint8_t *buf = priv->tx_buf;
+	uint32_t value = 0;
+	int ret;
+
+	desc.act_len = 0;
+	desc.dir_out = true;
+	desc.data = (char *)buf;
+	desc.timeout = FTDI_USB_WRITE_TIMEOUT;
+
+	switch (priv->usb_dev_id->idProduct) {
+	case 0x6001: /* FT232 */
+		if (clock_freq_hz >= FTDI_CLK_6MHZ) {
+			value = (FTDI_CLK_6MHZ/clock_freq_hz) - 1;
+		}
+		break;
+
+	case 0x6010: /* FT2232 */
+	case 0x6011: /* FT4232 */
+	case 0x6014: /* FT232H */
+	case 0x0146: /* GW16146 */
+		desc.len = 1;
+		if (clock_freq_hz <= (FTDI_CLK_30MHZ/65535)) {
+			buf[0] = EN_DIV_5;
+			ret = ftdi_bulk_xfer(intf, &desc);
+			if (ret) {
+				return ret;
+			}
+			value = (FTDI_CLK_6MHZ/clock_freq_hz) - 1;
+		}
+		else {
+			buf[0] = DIS_DIV_5;
+			ret = ftdi_bulk_xfer(intf, &desc);
+			if (ret) {
+				return ret;
+			}
+			value = (FTDI_CLK_30MHZ/clock_freq_hz) - 1;
+		}
+
+		break;
+	}
+
+	buf[0] = TCK_DIVISOR;
+	buf[1] = (uint8_t)(value & 0xff);
+	buf[2] = (uint8_t)(value >> 8);
+	desc.act_len = 0;
+	desc.len = 3;
+	ret = ftdi_bulk_xfer(intf, &desc);
+
+	return ret;
+}
+
+/*
+ * ftdi_set_latency - set the device latency (Bulk-In interval)
+ * @intf: USB interface pointer
+ * @latency_msec: latency value to set, 1-255
+ *
+ * Return: If successful, 0. Otherwise a negative error number.
+ */
+static int ftdi_set_latency(struct usb_interface *intf, int latency_msec)
+{
+	struct ft232h_intf_priv *priv = usb_get_intfdata(intf);
+	struct ctrl_desc desc;
+	int ret;
+
+	desc.dir_out = true;
+	desc.request = FTDI_SIO_SET_LATENCY_TIMER_REQUEST;
+	desc.requesttype = USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_DIR_OUT;
+	desc.value = latency_msec;
+	desc.index = priv->index;
+	desc.data = NULL;
+	desc.size = 0;
+	desc.timeout = USB_CTRL_SET_TIMEOUT;
+
+	ret = ftdi_ctrl_xfer(intf, &desc);
+	if (ret < 0) {
+		dev_dbg(&intf->dev, "failed to set latency: %d\n", ret);
 		return ret;
 	}
 
@@ -843,6 +944,8 @@ static void ftdi_mpsse_gpio_set(struct gpio_chip *chip, unsigned int offset,
 	struct ft232h_intf_priv *priv = gpiochip_get_data(chip);
 	bool low;
 
+//	int irq, irq_type, ret = 0;
+//	int pin = irqd_to_hwirq(irqd);
 	mutex_lock(&priv->io_mutex);
 	if (!priv->intf) {
 		mutex_unlock(&priv->io_mutex);
@@ -1016,31 +1119,13 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 	priv->mpsse_gpio.set = ftdi_mpsse_gpio_set;
 	priv->mpsse_gpio.get = ftdi_mpsse_gpio_get;
 	priv->mpsse_gpio.direction_input = ftdi_mpsse_gpio_direction_input;
-	priv->mpsse_gpio.direction_output = ftdi_mpsse_gpio_direction_output;
+ 	priv->mpsse_gpio.direction_output = ftdi_mpsse_gpio_direction_output;
 
 	names = devm_kcalloc(dev, priv->mpsse_gpio.ngpio, sizeof(char *),
 			     GFP_KERNEL);
 	if (!names)
 		return -ENOMEM;
 
-/*	names[0] = devm_kasprintf(dev, GFP_KERNEL, "mpsse.%d-CS", priv->id);
-	if (!names[0])
-		return -ENOMEM;
-
-	for (i = 1; i < priv->mpsse_gpio.ngpio; i++) {
-		int offs;
-
-		offs = i < 5 ? 1 : 5;
-		names[i] = devm_kasprintf(dev, GFP_KERNEL,
-					  "mpsse.%d-GPIO%c%d", priv->id,
-					  i < 5 ? 'L' : 'H', i - offs);
-		if (!names[i])
-			return -ENOMEM;
-	}
-
-//	priv->mpsse_gpio.names = (const char *const *)names;
-
-*/
 	priv->mpsse_gpio.names = gpio_names;
 
 	ret = ftdi_set_bitmode(priv->intf, 0x00, BITMODE_MPSSE);
@@ -1054,6 +1139,7 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 		dev_err(dev, "Failed to add MPSSE GPIO chip: %d\n", ret);
 		return ret;
 	}
+//16ton  ftdi_mpsse_gpio_direction_input(&priv->mpsse_gpio, 3);
 
 	return 0;
 }
@@ -1084,6 +1170,8 @@ static const struct ft232h_intf_ops ft232h_intf_ops = {
 	.disable_bitbang = ftdi_disable_bitbang,
 	.init_pins = ftdi_mpsse_init_pins,
 	.cfg_bus_pins = ftdi_mpsse_cfg_bus_pins,
+	.set_clock = ftdi_set_clock,
+	.set_latency = ftdi_set_latency,
 };
 
 
@@ -1103,16 +1191,20 @@ static const struct mpsse_spi_dev_data ftdi_spi_dev_data[] = {
 	},
 };
 
+static const struct property_entry mcp251x_properties[] = {
+	PROPERTY_ENTRY_U32("clock-frequency", 8000000),
+//	PROPERTY_ENTRY_U32("xceiver", 1),
+//	PROPERTY_ENTRY_U32("gpio-controller", 3),
+	{}
+};
+
 static const struct property_entry ili9341_properties[] = {
-//	PROPERTY_ENTRY_U32("dc", 1),
-//	PROPERTY_ENTRY_U32("reset", 2),
-	PROPERTY_ENTRY_U32("rotate", 90),
-	PROPERTY_ENTRY_U32("bgr", 1),
-//	PROPERTY_ENTRY_U32("led", -1),
-	PROPERTY_ENTRY_U32("fps", 30),
-//    PROPERTY_ENTRY_U32("speed", 30000000),
-//	PROPERTY_ENTRY_U32("buswidth", 8),
-//	PROPERTY_ENTRY_U32("backlight", -1),
+	PROPERTY_ENTRY_U32("rotate", 270),
+	PROPERTY_ENTRY_BOOL("bgr"),
+	PROPERTY_ENTRY_U32("fps", 60),
+	PROPERTY_ENTRY_U32("speed", 30000000),
+	PROPERTY_ENTRY_U32("buswidth", 8),
+	PROPERTY_ENTRY_U32("regwidth", 8),
 	{}
 };
 
@@ -1120,19 +1212,35 @@ static const struct software_node ili9341_node = {
 	.properties = ili9341_properties,
 };
 
+// #include "../../staging/fbtft/fbtft.h"
+
 static struct spi_board_info ftdi_spi_bus_info[] = {
     {
-    .modalias	= "ili9341",
 //    .modalias	= "yx240qv29",
+//	.modalias	= "ili9341",
+//	.modalias	= "mcp251x",
+	.modalias	= "spidev",
     .mode		= SPI_MODE_0,
-    .max_speed_hz	= 60000000,
+    .max_speed_hz	= 32000000,
     .bus_num	= 0,
-    .chip_select	= 0, // TCK/SK at ADBUS0
-	.swnode = &ili9341_node,
+    .chip_select	= 0,
+/*	.platform_data = &(struct fbtft_platform_data) {
+				.display = {
+					.buswidth = 8,
+				},
+				.bgr = true,
+				.gpios = (const struct fbtft_gpio []) {
+					{ "reset", 2 },
+					{ "dc", 1 },
+					{},
+				},
+	},
+*/
     .platform_data	= ftdi_spi_dev_data,
-//    .properties	= ili9341_properties,
+// 	.properties	= mcp251x_properties,
+//	.swnode  =  &ili9341_node,
     },
-    {
+   {
 //    .modalias	= "spidev",
     .modalias	= "w25q32",
     .mode		= SPI_MODE_0,
@@ -1210,7 +1318,13 @@ static struct platform_device *mpsse_dev_register(struct ft232h_intf_priv *priv,
 	}
 
 	priv->lookup_cs = lookup;
+	priv->lookup_dc = lookup;
+	priv->lookup_reset = lookup;
+	priv->lookup_interrupts = lookup;
 	gpiod_add_lookup_table(priv->lookup_cs);
+	gpiod_add_lookup_table(priv->lookup_dc);
+	gpiod_add_lookup_table(priv->lookup_reset);
+	gpiod_add_lookup_table(priv->lookup_interrupts);
 
 	ret = platform_device_add(pdev);
 	if (ret < 0)
@@ -1346,6 +1460,8 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 	struct ft232h_intf_priv *priv = usb_get_intfdata(intf);
 	const struct ft232h_intf_info *info;
 
+//	free_irq(GPIO_irqNumber,NULL);
+
 	info = (struct ft232h_intf_info *)priv->usb_dev_id->driver_info;
 	if (info && info->remove)
 		info->remove(intf);
@@ -1363,6 +1479,9 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 
 	usb_put_dev(priv->udev);
 	ida_simple_remove(&ftdi_devid_ida, priv->id);
+
+	mutex_destroy(&priv->io_mutex);
+	mutex_destroy(&priv->ops_mutex);
 }
 
 #define FTDI_VID			0x0403
