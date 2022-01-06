@@ -1307,13 +1307,6 @@ static const struct mpsse_spi_dev_data ftdi_spi_dev_data[] = {
 	},
 };
 
-static const struct property_entry mcp251x_properties[] = {
-	PROPERTY_ENTRY_U32("clock-frequency", 8000000),
-//	PROPERTY_ENTRY_U32("xceiver", 1),
-//	PROPERTY_ENTRY_U32("gpio-controller", 3),
-	{}
-};
-
 static const struct property_entry ili9341_properties[] = {
 	PROPERTY_ENTRY_U32("rotate", 270),
 	PROPERTY_ENTRY_BOOL("bgr"),
@@ -1328,8 +1321,6 @@ static const struct software_node ili9341_node = {
 	.properties = ili9341_properties,
 };
 
-// #include "../../staging/fbtft/fbtft.h"
-
 static struct spi_board_info ftdi_spi_bus_info[] = {
     {
 //    .modalias	= "yx240qv29",
@@ -1340,21 +1331,10 @@ static struct spi_board_info ftdi_spi_bus_info[] = {
     .max_speed_hz	= 32000000,
     .bus_num	= 0,
     .chip_select	= 0,
-/*	.platform_data = &(struct fbtft_platform_data) {
-				.display = {
-					.buswidth = 8,
-				},
-				.bgr = true,
-				.gpios = (const struct fbtft_gpio []) {
-					{ "reset", 2 },
-					{ "dc", 1 },
-					{},
-				},
-	},
 */
     .platform_data	= ftdi_spi_dev_data,
-// 	.properties	= mcp251x_properties,
-	.swnode  =  &ili9341_node,
+// 	.properties	= ili9341_properties,    //changed from properties to swnode i dunno aroun kernel 5.15ish
+//	.swnode  =  &ili9341_node,
     },
    {
 //    .modalias	= "spidev",
@@ -1533,6 +1513,22 @@ static const struct ft232h_intf_info fpga_cfg_fifo_intf_info = {
 	.plat_data = &fpga_cfg_fpp_plat_data,
 };
 
+
+static int ftx232h_jtag_probe(struct usb_interface *intf)
+{
+//	int ifnum = intf->cur_altsetting->desc.bInterfaceNumber;
+	int inf;
+	inf = intf->cur_altsetting->desc.bInterfaceNumber;
+
+	if (inf > 0) {
+		dev_info(&intf->dev, "Ignoring interface reservedG\n");
+		return -ENODEV;
+	} else {
+
+	return 0;
+  }
+}
+
 static int ft232h_intf_probe(struct usb_interface *intf,
 			     const struct usb_device_id *id)
 {
@@ -1544,15 +1540,26 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	unsigned int i;
 	int ret = 0;
 	int inf;
-	inf = intf->cur_altsetting->desc.bInterfaceNumber;
-	if (inf > 0) {
-		dev_info(&intf->dev, "Ignoring Interface\n");
-		return -ENODEV;
-		}
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
+
+
+	priv->udev = usb_get_dev(interface_to_usbdev(intf));
+	inf = intf->cur_altsetting->desc.bInterfaceNumber;
+
+     if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
+	 	ret = ftx232h_jtag_probe(intf);
+		if (ret < 0)
+			goto err;
+	}
+
+     if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
+		ret = ftx232h_jtag_probe(intf);
+		if (ret < 0)
+			goto err;
+	}
 
 	iface_desc = intf->cur_altsetting;
 
@@ -1645,12 +1652,12 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 #define ARRI_SPI_INTF_PRODUCT_ID	0x7149
 
 static struct usb_device_id ft232h_intf_table[] = {
-	{ USB_DEVICE(FTDI_VID, 0x6010),
-		.driver_info = (kernel_ulong_t)&fpga_cfg_fifo_intf_info },
+//	{ USB_DEVICE(FTDI_VID, 0x6010),
+//		.driver_info = (kernel_ulong_t)&fpga_cfg_fifo_intf_info },
 	{ USB_DEVICE(FTDI_VID, ARRI_SPI_INTF_PRODUCT_ID),
 		.driver_info = (kernel_ulong_t)&fpga_cfg_spi_intf_info },
-//	{ USB_DEVICE(FTDI_VID, 0x6011),
-//        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
+	{ USB_DEVICE(FTDI_VID, 0x6010),
+        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6011),
         .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{}
