@@ -1333,9 +1333,9 @@ static const struct software_node ili9341_node = {
 static struct spi_board_info ftdi_spi_bus_info[] = {
     {
 //    .modalias	= "yx240qv29",
-	.modalias	= "ili9341",
+//	.modalias	= "ili9341",
 //	.modalias	= "mcp251x",
-//	.modalias	= "spidev",
+	.modalias	= "spidev",
     .mode		= SPI_MODE_0,
     .max_speed_hz	= 32000000,
     .bus_num	= 0,
