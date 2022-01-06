@@ -10,6 +10,7 @@
 
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
+#include <linux/notifier.h>
 
 struct fpga_manager;
 struct sg_table;
@@ -203,5 +204,16 @@ int devm_fpga_mgr_register(struct device *dev, struct fpga_manager *mgr);
 struct fpga_manager *devm_fpga_mgr_create(struct device *dev, const char *name,
 					  const struct fpga_manager_ops *mops,
 					  void *priv);
+
+/*
+ * FPGA Manager register notifier events
+ * FPGA_MGR_ADD: a new fpga manager has been registered
+ * FPGA_MGR_REMOVE: a registered fpga manager is being removed
+ */
+#define FPGA_MGR_ADD	1
+#define FPGA_MGR_REMOVE	2
+
+void fpga_mgr_register_mgr_notifier(struct notifier_block *nb);
+void fpga_mgr_unregister_mgr_notifier(struct notifier_block *nb);
 
 #endif /*_LINUX_FPGA_MGR_H */
