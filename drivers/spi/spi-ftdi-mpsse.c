@@ -57,6 +57,7 @@ struct ftdi_spi {
 	u8 xfer_buf[SZ_64K];
 	u16 last_mode;
 	u32 last_speed_hz;
+	int ftmodel;
 };
 
 static void ftdi_spi_set_cs(struct spi_device *spi, bool enable)
@@ -524,6 +525,24 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	u16 dc, reset, interrupts, num_cs, max_cs = 0;
 	unsigned int i;
 	int ret;
+//	int ret2;
+	int model;
+
+	int ftmod2;
+	int ftmod4;
+
+	ftmod2 = 2232;
+	ftmod4 = 4232;
+
+/*	
+	model = ft232h_intf_get_model();
+    if (model = 4232) {
+		dev_dbg(dev, "model set to 4232.\n", model);
+	} else {
+		dev_dbg(dev, "model set to unknown.\n", model);
+    }
+*/
+	
 
 	pd = dev->platform_data;
 	if (!pd) {
@@ -567,6 +586,16 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	priv->pdev = pdev;
 	priv->intf = to_usb_interface(dev->parent);
 	priv->iops = pd->ops;
+
+	model = ft232h_intf_get_model(priv->intf);
+/*    if (model = 4232) {
+		priv->ftmodel = ftmod4
+		dev_dbg(dev, "model set to 4232.\n", priv->ftmodel);
+	} else {
+		priv->ftmodel = ftmod2
+		dev_dbg(dev, "model set to unknown.\n", priv->ftmodel);
+    }
+*/
 
 	master->bus_num = -1;
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP |

@@ -149,6 +149,7 @@ struct ft232h_intf_priv {
 	struct gpiod_lookup_table	*lookup_dc;
 	struct gpiod_lookup_table	*lookup_reset;
 	struct gpiod_lookup_table	*lookup_interrupts;
+   
 
 	struct gpio_chip	cbus_gpio;
 	const char		*cbus_gpio_names[4];
@@ -165,6 +166,7 @@ struct ft232h_intf_priv {
 	u8			tx_buf[4];
 	unsigned int offset;
 
+	int			ftmodel;
 
 };
 
@@ -175,6 +177,7 @@ struct ft232h_intf_info {
 	int (*probe)(struct usb_interface *intf, const void *plat_data);
 	int (*remove)(struct usb_interface *intf);
 	const void *plat_data; /* optional, passed to probe() */
+	int			ftmodel;
 };
 
 static DEFINE_IDA(ftdi_devid_ida);
@@ -1101,6 +1104,13 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 	char **names, *label;
 //	int i, ret;
 //16ton replaces commented line above
+//	if priv->ftmodel
+//    if (priv->ftmodel = 4232) {
+//#define FTDI_MPSSE_GPIOS 13
+//	} else {
+//#define FTDI_MPSSE_GPIOS 5
+//	}
+
 	int ret;
 	label = devm_kasprintf(dev, GFP_KERNEL, "ftdi-mpsse-gpio.%d", priv->id);
 	if (!label)
@@ -1196,9 +1206,10 @@ static int ft232h_intf_fpp_probe(struct usb_interface *intf,
 	struct device *dev = &intf->dev;
 	struct platform_device *pdev;
 	struct gpiod_lookup_table *lookup;
-	char *cfgdone, *ncfg, *ptr;
+//	char *cfgdone, *ncfg, *ptr;
+	char *cfgdone, *ncfg;    /* 16ton to replace line above*/
 	size_t lookup_size;
-	int i, ret, gpios = 0;
+//	int i, ret, gpios = 0;
 
 	dev_dbg(dev, "%s: plat_data %p\n", __func__, pd);
 	if (!pd) {
@@ -1206,9 +1217,9 @@ static int ft232h_intf_fpp_probe(struct usb_interface *intf,
 		return -EINVAL;
 	}
 
-	ret = ft232h_intf_add_cbus_gpio(priv);
-	if (ret < 0)
-		return ret;
+//	ret = ft232h_intf_add_cbus_gpio(priv);
+//	if (ret < 0)
+//		return ret;
 
 	lookup_size = sizeof(*lookup) + 3 * sizeof(struct gpiod_lookup);
 	lookup = devm_kzalloc(dev, lookup_size, GFP_KERNEL);
@@ -1228,6 +1239,7 @@ static int ft232h_intf_fpp_probe(struct usb_interface *intf,
 	if (!cfgdone)
 		return -ENOMEM;
 
+/*
 	for (i = 0; i < priv->cbus_gpio.ngpio; i++) {
 		if (!priv->cbus_gpio.names[i])
 			continue;
@@ -1246,8 +1258,9 @@ static int ft232h_intf_fpp_probe(struct usb_interface *intf,
 			gpios++;
 		}
 	}
-
+*/
 	/* Does GPIO controller provide all needed ACBUS pins? */
+/*
 	if (gpios < 2) {
 		dev_err(dev, "Missing control GPIOs\n");
 		return -ENODEV;
@@ -1259,9 +1272,9 @@ static int ft232h_intf_fpp_probe(struct usb_interface *intf,
 		lookup->table[i].con_id = pd->io_data[i].con_id;
 		lookup->table[i].flags = pd->io_data[i].flags;
 	}
-
+*/
 	priv->lookup_fifo = lookup;
-	gpiod_add_lookup_table(priv->lookup_fifo);
+//	gpiod_add_lookup_table(priv->lookup_fifo);
 
 	pdev = platform_device_register_data(dev, FPP_INTF_DEVNAME,
 					     priv->id, pd, sizeof(*pd));
@@ -1331,7 +1344,6 @@ static struct spi_board_info ftdi_spi_bus_info[] = {
     .max_speed_hz	= 32000000,
     .bus_num	= 0,
     .chip_select	= 0,
-
     .platform_data	= ftdi_spi_dev_data,
 // 	.properties	= ili9341_properties,    //changed from properties to swnode i dunno aroun kernel 5.15ish
 //	.swnode  =  &ili9341_node,
@@ -1513,10 +1525,40 @@ static const struct ft232h_intf_info fpga_cfg_fifo_intf_info = {
 	.plat_data = &fpga_cfg_fpp_plat_data,
 };
 
+int ft232h_intf_get_model(struct usb_interface *intf)
+{
+	struct ft232h_intf_priv *priv;
+	struct device *dev = &intf->dev;
+	const struct ft232h_intf_info *info;
+
+	int ftmod2;
+	int ftmod4;
+	int ret;
+
+	ftmod2 = 2232;
+	ftmod4 = 4232;
+
+	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
+
+	priv->udev = usb_get_dev(interface_to_usbdev(intf));
+    if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
+	priv->ftmodel = ftmod4;
+	dev_info(dev, "model %d\n", priv->ftmodel);
+	} 
+	if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
+	priv->ftmodel = ftmod2;
+	dev_info(dev, "model %d\n", priv->ftmodel);
+	} 	
+
+	ret = priv->ftmodel;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ft232h_intf_get_model);
 
 static int ftx232h_jtag_probe(struct usb_interface *intf)
 {
-//	int ifnum = intf->cur_altsetting->desc.bInterfaceNumber;
 	int inf;
 	inf = intf->cur_altsetting->desc.bInterfaceNumber;
 
@@ -1545,20 +1587,25 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	if (!priv)
 		return -ENOMEM;
 
-
 	priv->udev = usb_get_dev(interface_to_usbdev(intf));
 	inf = intf->cur_altsetting->desc.bInterfaceNumber;
 
+	ft232h_intf_get_model(intf);
+
      if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
 	 	ret = ftx232h_jtag_probe(intf);
-		if (ret < 0)
-			goto err;
+		if (ret < 0) {
+			return -ENODEV;
+//			goto err;
+		}
 	}
 
      if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
 		ret = ftx232h_jtag_probe(intf);
-		if (ret < 0)
-			goto err;
+		if (ret < 0) {
+			return -ENODEV;
+//			goto err;
+		}
 	}
 
 	iface_desc = intf->cur_altsetting;
@@ -1654,8 +1701,8 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 static struct usb_device_id ft232h_intf_table[] = {
 //	{ USB_DEVICE(FTDI_VID, 0x6010),
 //		.driver_info = (kernel_ulong_t)&fpga_cfg_fifo_intf_info },
-	{ USB_DEVICE(FTDI_VID, ARRI_SPI_INTF_PRODUCT_ID),
-		.driver_info = (kernel_ulong_t)&fpga_cfg_spi_intf_info },
+//	{ USB_DEVICE(FTDI_VID, ARRI_SPI_INTF_PRODUCT_ID),
+//		.driver_info = (kernel_ulong_t)&fpga_cfg_spi_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6010),
         .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6011),

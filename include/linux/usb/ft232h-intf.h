@@ -215,9 +215,6 @@ struct mpsse_spi_platform_data {
 //	int dc;
 };
 
-
-
-
 /*
  * Value HIGH. rate is 12000000 / ((1 + value) * 2)
  */
@@ -232,5 +229,7 @@ static inline int div_value(int rate)
 		return r;
 	return 0xffff;
 }
+
+extern int ft232h_intf_get_model(struct usb_interface *intf);
 
 #endif /* __LINUX_FT232H_INTF_H */
