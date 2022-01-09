@@ -2442,13 +2442,12 @@ static int ftdi_8u2232c_probe(struct usb_serial *serial)
 	if (udev->manufacturer && !strcmp(udev->manufacturer, "CALAO Systems"))
 		return ftdi_jtag_probe(serial);
 
-     if (udev->product && !strcmp(udev->product, "ft4232H-16ton"))
+     if (udev->product && (!strcmp(udev->product, "ft4232H-16ton") || !strcmp(udev->product, "ft2232H-16ton")))
 		return ft4232_jtag_probe(serial);
 
 	if (udev->product &&
 		(!strcmp(udev->product, "Arrow USB Blaster") ||
 		 !strcmp(udev->product, "BeagleBone/XDS100V2") ||
-		 !strcmp(udev->product, "ft2232H-16ton") ||
 		 !strcmp(udev->product, "SNAP Connect E10")))
 		return ftdi_jtag_probe(serial);
 
