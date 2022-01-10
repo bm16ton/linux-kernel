@@ -1099,11 +1099,13 @@ static int ftdi_mpsse_cfg_bus_pins(struct usb_interface *intf,
 }
 
 const char *gpio_names[] = { "CS", "dc", "reset", "interrupts", "GPIOL3" };
+const char *gpio_names2[] = { "CS", "dc", "reset", "interrupts", "GPIOL3", "GPIOH0", "GPIOH1", "GPIOH2", "GPIOH3", "GPIOH4", "GPIOH5", "GPIOH6", "GPIOH7" };
 
 static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 {
 	struct device *dev = &priv->intf->dev;
 	char **names, *label;
+	int MPSSE_GPIOS;
 //	int i, ret;
 //16ton replaces commented line above
 //	if priv->ftmodel
@@ -1112,8 +1114,11 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 //	} else {
 //#define FTDI_MPSSE_GPIOS 5
 //	}
-
+	
 	int ret;
+	MPSSE_GPIOS = ft232h_intf_get_numgpio(priv->intf);
+
+	// MPSSE_GPIOS = priv->numgpio;
 	label = devm_kasprintf(dev, GFP_KERNEL, "ftdi-mpsse-gpio.%d", priv->id);
 	if (!label)
 		return -ENOMEM;
@@ -1122,7 +1127,7 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 	priv->mpsse_gpio.parent = dev;
 	priv->mpsse_gpio.owner = THIS_MODULE;
 	priv->mpsse_gpio.base = -1;
-	priv->mpsse_gpio.ngpio = FTDI_MPSSE_GPIOS;
+	priv->mpsse_gpio.ngpio = MPSSE_GPIOS;
 	priv->mpsse_gpio.can_sleep = true;
 	priv->mpsse_gpio.set = ftdi_mpsse_gpio_set;
 	priv->mpsse_gpio.get = ftdi_mpsse_gpio_get;
@@ -1134,7 +1139,14 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 	if (!names)
 		return -ENOMEM;
 
+	if (MPSSE_GPIOS < 6) {
 	priv->mpsse_gpio.names = gpio_names;
+	}
+	if (MPSSE_GPIOS > 12) {
+	priv->mpsse_gpio.names = gpio_names2;
+	}
+
+//	priv->mpsse_gpio.names = gpio_names;
 
 	ret = ftdi_set_bitmode(priv->intf, 0x00, BITMODE_MPSSE);
 	if (ret < 0) {

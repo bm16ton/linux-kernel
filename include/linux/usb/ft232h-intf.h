@@ -56,7 +56,7 @@
 /* Total number of MPSSE GPIOs: 4x GPIOL, 8x GPIOH, 1x CS on ADBUS3 */
 //#define FTDI_MPSSE_GPIOS	13
 
-#define FTDI_MPSSE_GPIOS	5
+#define FTDI_MPSSE_GPIOS	13
 
 /* MPSSE bitbang modes (copied from libftdi) */
 enum ftdi_mpsse_mode {
