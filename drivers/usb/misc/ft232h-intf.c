@@ -674,8 +674,8 @@ static int ftdi_read_eeprom(struct ft232h_intf_priv *priv)
 		}
 	}
 
-	print_hex_dump_debug("EEPROM: ", DUMP_PREFIX_OFFSET, 16, 1,
-			     priv->eeprom, sizeof(priv->eeprom), 1);
+//	print_hex_dump_debug("EEPROM: ", DUMP_PREFIX_OFFSET, 16, 1,
+//			     priv->eeprom, sizeof(priv->eeprom), 1);
 
 	print_hex_dump(KERN_DEBUG, "EEPROM: ", DUMP_PREFIX_OFFSET, 16, 1, priv->eeprom, sizeof(priv->eeprom), 1);
 
@@ -1143,26 +1143,12 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 	struct device *dev = &priv->intf->dev;
 	char **names, *label;
 	int MPSSE_GPIOS;
-//	int i, ret;
-//16ton replaces commented line above
-//	if priv->ftmodel
-//    if (priv->ftmodel = 4232) {
-//#define FTDI_MPSSE_GPIOS 13
-//	} else {
-//#define FTDI_MPSSE_GPIOS 5
-//	}
 	
 	int ret;
-
-	dev_info(dev, "in add_mpsse_gpio before read_eeprom\n");
-
-	ftdi_read_eeprom(priv);
 
 	ret = ftdi_read_eeprom(priv);
 	if (ret < 0)
 		return ret;
-
-	dev_info(dev, "in add_mpsse_gpio after read_eeprom\n");
 
 	MPSSE_GPIOS = ft232h_intf_get_numgpio(priv->intf);
 
@@ -1606,11 +1592,11 @@ int ft232h_intf_get_model(struct usb_interface *intf)
 	priv->udev = usb_get_dev(interface_to_usbdev(intf));
     if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
 	priv->ftmodel = ftmod4;
-	dev_info(dev, "model %d\n", priv->ftmodel);
+//	dev_info(dev, "model %d\n", priv->ftmodel);
 	} 
 	if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
 	priv->ftmodel = ftmod2;
-	dev_info(dev, "model %d\n", priv->ftmodel);
+//	dev_info(dev, "model %d\n", priv->ftmodel);
 	} 	
 
 	ret = priv->ftmodel;
@@ -1637,11 +1623,11 @@ int ft232h_intf_get_numgpio(struct usb_interface *intf)
 	priv->udev = usb_get_dev(interface_to_usbdev(intf));
     if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
 	priv->numgpio = ftgpio4;
-	dev_info(dev, "mpsse gpio num %d\n", priv->numgpio);
+//	dev_info(dev, "mpsse gpio num %d\n", priv->numgpio);
 	} 
 	if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
 	priv->numgpio = ftgpio2;
-	dev_info(dev, "mpsse gpio num  %d\n", priv->numgpio);
+//	dev_info(dev, "mpsse gpio num  %d\n", priv->numgpio);
 	} 	
 
 	ret = priv->numgpio;
@@ -1655,7 +1641,7 @@ static int ftx232h_jtag_probe(struct usb_interface *intf)
 	inf = intf->cur_altsetting->desc.bInterfaceNumber;
 
 	if (inf > 0) {
-		dev_info(&intf->dev, "Ignoring interface reservedG\n");
+		dev_info(&intf->dev, "Ignoring interface reserved\n");
 		return -ENODEV;
 	} else {
 
@@ -1702,27 +1688,21 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 		}
 	}
 
-	dev_info(&intf->dev, "before sysfs create\n");
-
 	eeprom = kobject_create_and_add("mpsse_sysfs",kernel_kobj);
 
 	if(eeprom == NULL) {
 		dev_info(&intf->dev, "failed to create the sysfs directory mpsse_sysfs\n");
 		return -ENOMEM;
 	} else {
-		dev_info(&intf->dev, "no error for mpsse_sysfs directory\n");
+		dev_info(&intf->dev, "successfully created /sys/kernel/mpsse_sysfs directory\n");
 	}
 
 	error = sysfs_create_file(eeprom, &sysfs_attribute.attr);
 	if (error) {
 		dev_info(&intf->dev, "failed to create the sysfs file\n");
-	} 
-
-//	return error;
-
-
-	dev_info(&intf->dev, "after return error\n");
-
+	} else {
+		dev_info(&intf->dev, "successfully created sysfs file mpsse_sysfs/eeprom\n");
+	}
 
 	iface_desc = intf->cur_altsetting;
 
@@ -1772,7 +1752,6 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 
 	/* for simple GPIO-only devices */
 //	ret = -ENODEV;
-	dev_info(&intf->dev, "in ft232h_intf_probe before add_mpsse_gpio\n");
 
 	if (info->use_cbus_gpio_ctrl)
 		ret = ft232h_intf_add_cbus_gpio(priv);
