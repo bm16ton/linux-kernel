@@ -28,6 +28,9 @@
 #include <linux/usb.h>
 #include <linux/usb/ft232h-intf.h>
 
+#include <linux/of.h>
+#include <linux/of_gpio.h>
+#include <linux/stringify.h>
 
 int spi_ftdi_mpsse_debug;
 module_param_named(debug, spi_ftdi_mpsse_debug, int, 0444);
@@ -719,8 +722,23 @@ static int ftdi_spi_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct of_device_id ftdi_of_match[] = {
+	{ .compatible = "ftdi,ftdi-mpsse-spi", },
+	{},
+};
+MODULE_DEVICE_TABLE(of, ftdi_of_match);
+
+static const struct spi_device_id ftdi_spi_ids[] = {
+	{ .name = "ftdi-mpsse-spi", (unsigned long)ftdi_spi_probe },
+	{},
+};
+MODULE_DEVICE_TABLE(spi, ftdi_spi_ids);
+
 static struct platform_driver ftdi_spi_driver = {
-	.driver.name	= "ftdi-mpsse-spi",
+	.driver		= {
+				.name	= "ftdi-mpsse-spi",
+				.of_match_table = of_match_ptr(ftdi_of_match),
+	},
 	.probe		= ftdi_spi_probe,
 	.remove		= ftdi_spi_remove,
 };
