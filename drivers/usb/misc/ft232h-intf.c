@@ -1351,16 +1351,16 @@ static const struct software_node ili9341_node = {
 static struct spi_board_info ftdi_spi_bus_info[] = {
     {
 //    .modalias	= "yx240qv29",
-//	.modalias	= "ili9341",
+	.modalias	= "ili9341",
 //	.modalias	= "mcp251x",
-	.modalias	= "spidev",
+//	.modalias	= "spidev",
     .mode		= SPI_MODE_0,
     .max_speed_hz	= 32000000,
     .bus_num	= 0,
     .chip_select	= 0,
     .platform_data	= ftdi_spi_dev_data,
 // 	.properties	= ili9341_properties,    //changed from properties to swnode i dunno aroun kernel 5.15ish
-//	.swnode  =  &ili9341_node,
+	.swnode  =  &ili9341_node,
     },
    {
 //    .modalias	= "spidev",
@@ -1729,6 +1729,7 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 
 	mutex_lock(&priv->io_mutex);
 	priv->intf = NULL;
+	priv->mpsse_gpio.names = NULL;
 	usb_set_intfdata(intf, NULL);
 	mutex_unlock(&priv->io_mutex);
 

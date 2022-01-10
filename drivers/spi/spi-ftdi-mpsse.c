@@ -40,12 +40,14 @@ enum gpiol {
 	MPSSE_CS	= BIT(3),
 };
 
+// FTDI_MPSSE_GPIOS = ft232h_intf_get_numgpio(intf);
+
 struct ftdi_spi {
 	struct platform_device *pdev;
 	struct usb_interface *intf;
 	struct spi_controller *master;
 	const struct ft232h_intf_ops *iops;
-	struct gpiod_lookup_table *lookup[FTDI_MPSSE_GPIOS];
+	struct gpiod_lookup_table *lookup[FTDI_MPSSE_GPIOS5];
 	struct gpio_desc **cs_gpios;
 	struct gpio_desc **dc_gpios;
 	struct gpio_desc **reset_gpios;
@@ -550,7 +552,7 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	    !pd->ops->set_clock || !pd->ops->set_latency)
 	    	return -EINVAL;
 
-	if (pd->spi_info_len > FTDI_MPSSE_GPIOS)
+	if (pd->spi_info_len > FTDI_MPSSE_GPIOS13)
 		return -EINVAL;
 
 	/* Find max. slave chipselect number */
@@ -560,7 +562,7 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 			max_cs = pd->spi_info[i].chip_select;
 	}
 
-	if (max_cs > FTDI_MPSSE_GPIOS - 1) {
+	if (max_cs > FTDI_MPSSE_GPIOS5 - 1) {
 		dev_err(dev, "Invalid max CS in platform data: %u\n", max_cs);
 		return -EINVAL;
 	}
