@@ -58,6 +58,7 @@ struct ftdi_spi {
 	u16 last_mode;
 	u32 last_speed_hz;
 	int ftmodel;
+	int gpionum;
 };
 
 static void ftdi_spi_set_cs(struct spi_device *spi, bool enable)
@@ -527,22 +528,13 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	int ret;
 //	int ret2;
 	int model;
+	int numgpio;
 
 	int ftmod2;
 	int ftmod4;
 
 	ftmod2 = 2232;
 	ftmod4 = 4232;
-
-/*	
-	model = ft232h_intf_get_model();
-    if (model = 4232) {
-		dev_dbg(dev, "model set to 4232.\n", model);
-	} else {
-		dev_dbg(dev, "model set to unknown.\n", model);
-    }
-*/
-	
 
 	pd = dev->platform_data;
 	if (!pd) {
@@ -588,14 +580,12 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	priv->iops = pd->ops;
 
 	model = ft232h_intf_get_model(priv->intf);
-/*    if (model = 4232) {
-		priv->ftmodel = ftmod4
-		dev_dbg(dev, "model set to 4232.\n", priv->ftmodel);
-	} else {
-		priv->ftmodel = ftmod2
-		dev_dbg(dev, "model set to unknown.\n", priv->ftmodel);
-    }
-*/
+	priv->ftmodel = model;
+	dev_info(dev, "model num %d\n", priv->ftmodel);
+
+    numgpio = ft232h_intf_get_numgpio(priv->intf);
+	priv->gpionum = numgpio;
+	dev_info(dev, "gpio num %d\n", priv->gpionum);
 
 	master->bus_num = -1;
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP |

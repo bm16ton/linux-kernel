@@ -231,5 +231,5 @@ static inline int div_value(int rate)
 }
 
 extern int ft232h_intf_get_model(struct usb_interface *intf);
-
+extern int ft232h_intf_get_numgpio(struct usb_interface *intf);
 #endif /* __LINUX_FT232H_INTF_H */

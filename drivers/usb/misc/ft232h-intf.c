@@ -167,6 +167,7 @@ struct ft232h_intf_priv {
 	unsigned int offset;
 
 	int			ftmodel;
+	int 		numgpio;
 
 };
 
@@ -178,6 +179,7 @@ struct ft232h_intf_info {
 	int (*remove)(struct usb_interface *intf);
 	const void *plat_data; /* optional, passed to probe() */
 	int			ftmodel;
+	int 		numgpio;
 };
 
 static DEFINE_IDA(ftdi_devid_ida);
@@ -1529,7 +1531,6 @@ int ft232h_intf_get_model(struct usb_interface *intf)
 {
 	struct ft232h_intf_priv *priv;
 	struct device *dev = &intf->dev;
-	const struct ft232h_intf_info *info;
 
 	int ftmod2;
 	int ftmod4;
@@ -1556,6 +1557,37 @@ int ft232h_intf_get_model(struct usb_interface *intf)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(ft232h_intf_get_model);
+
+int ft232h_intf_get_numgpio(struct usb_interface *intf)
+{
+	struct ft232h_intf_priv *priv;
+	struct device *dev = &intf->dev;
+
+	int ftgpio2;
+	int ftgpio4;
+	int ret;
+
+	ftgpio2 = 13;
+	ftgpio4 = 5;
+
+	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
+
+	priv->udev = usb_get_dev(interface_to_usbdev(intf));
+    if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
+	priv->numgpio = ftgpio4;
+	dev_info(dev, "mpsse gpio num %d\n", priv->numgpio);
+	} 
+	if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
+	priv->numgpio = ftgpio2;
+	dev_info(dev, "mpsse gpio num  %d\n", priv->numgpio);
+	} 	
+
+	ret = priv->numgpio;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ft232h_intf_get_numgpio);
 
 static int ftx232h_jtag_probe(struct usb_interface *intf)
 {
@@ -1591,6 +1623,7 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	inf = intf->cur_altsetting->desc.bInterfaceNumber;
 
 	ft232h_intf_get_model(intf);
+	ft232h_intf_get_numgpio(intf);
 
      if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
 	 	ret = ftx232h_jtag_probe(intf);
