@@ -123,6 +123,17 @@
 #include <linux/property.h>
 #include <linux/interrupt.h>
 
+#include <linux/fs.h>
+#include <linux/string.h>
+#include <linux/uaccess.h>
+#include <linux/sysfs.h>
+#include <linux/kobject.h>
+
+volatile int sysfs_value = 0;
+
+static struct kobject *eeprom;
+int			eepromdata[FTDI_MAX_EEPROM_SIZE];
+
 int usb_wait_msec = 0;
 module_param(usb_wait_msec, int, S_IRUSR | S_IWUSR);
 MODULE_PARM_DESC(usb_wait_msec, "Wait after USB transfer in msec");
@@ -156,7 +167,7 @@ struct ft232h_intf_priv {
 	u8			cbus_pin_offsets[4];
 	u8			cbus_mask;
 	u8			pinbuf[4];
-	u8			eeprom[FTDI_MAX_EEPROM_SIZE];
+//	u8			eeprom[FTDI_MAX_EEPROM_SIZE];
 
 	struct gpio_chip	mpsse_gpio;
 	u8			gpiol_mask;
@@ -168,8 +179,31 @@ struct ft232h_intf_priv {
 
 	int			ftmodel;
 	int 		numgpio;
-
+	u8			eeprom[FTDI_MAX_EEPROM_SIZE];
 };
+
+/*
+** This function will be called when we read the sysfs file
+*/
+static ssize_t sysfs_show(struct kobject *kobj, 
+                struct kobj_attribute *attr, char *buf)
+{
+//		eepromdata = 12;
+//        return sprintf(buf, "%d\n", eepromdata);
+		 return sprintf(buf, "todo eeprom dump\n");
+}
+/*
+** This function will be called when we write the sysfsfs file
+*/
+static ssize_t sysfs_store(struct kobject *kobj, 
+                struct kobj_attribute *attr, const char *buf, size_t count)
+{
+ //       pr_info("Sysfs - Write!!!\n");
+        sscanf(buf, "%d", &eepromdata);
+        return count;
+}
+
+struct kobj_attribute sysfs_attribute = __ATTR(eeprom, 0665, sysfs_show, sysfs_store);
 
 /* Device info struct used for device specific init. */
 struct ft232h_intf_info {
@@ -642,6 +676,9 @@ static int ftdi_read_eeprom(struct ft232h_intf_priv *priv)
 
 	print_hex_dump_debug("EEPROM: ", DUMP_PREFIX_OFFSET, 16, 1,
 			     priv->eeprom, sizeof(priv->eeprom), 1);
+
+	print_hex_dump(KERN_DEBUG, "EEPROM: ", DUMP_PREFIX_OFFSET, 16, 1, priv->eeprom, sizeof(priv->eeprom), 1);
+
 	return 0;
 }
 
@@ -769,7 +806,7 @@ static int ft232h_intf_add_cbus_gpio(struct ft232h_intf_priv *priv)
 	int ngpio = 0;
 	int i, ret;
 	u8 val;
-
+ 
 	ret = ftdi_read_eeprom(priv);
 	if (ret < 0)
 		return ret;
@@ -1116,6 +1153,17 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 //	}
 	
 	int ret;
+
+	dev_info(dev, "in add_mpsse_gpio before read_eeprom\n");
+
+	ftdi_read_eeprom(priv);
+
+	ret = ftdi_read_eeprom(priv);
+	if (ret < 0)
+		return ret;
+
+	dev_info(dev, "in add_mpsse_gpio after read_eeprom\n");
+
 	MPSSE_GPIOS = ft232h_intf_get_numgpio(priv->intf);
 
 	// MPSSE_GPIOS = priv->numgpio;
@@ -1626,6 +1674,7 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	unsigned int i;
 	int ret = 0;
 	int inf;
+	int error = 0;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -1652,6 +1701,28 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 //			goto err;
 		}
 	}
+
+	dev_info(&intf->dev, "before sysfs create\n");
+
+	eeprom = kobject_create_and_add("mpsse_sysfs",kernel_kobj);
+
+	if(eeprom == NULL) {
+		dev_info(&intf->dev, "failed to create the sysfs directory mpsse_sysfs\n");
+		return -ENOMEM;
+	} else {
+		dev_info(&intf->dev, "no error for mpsse_sysfs directory\n");
+	}
+
+	error = sysfs_create_file(eeprom, &sysfs_attribute.attr);
+	if (error) {
+		dev_info(&intf->dev, "failed to create the sysfs file\n");
+	} 
+
+//	return error;
+
+
+	dev_info(&intf->dev, "after return error\n");
+
 
 	iface_desc = intf->cur_altsetting;
 
@@ -1700,13 +1771,16 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	}
 
 	/* for simple GPIO-only devices */
-	ret = -ENODEV;
+//	ret = -ENODEV;
+	dev_info(&intf->dev, "in ft232h_intf_probe before add_mpsse_gpio\n");
+
 	if (info->use_cbus_gpio_ctrl)
 		ret = ft232h_intf_add_cbus_gpio(priv);
 	else if (info->use_mpsse_gpio_ctrl)
 		ret = ft232h_intf_add_mpsse_gpio(priv);
 	if (!ret)
 		return 0;
+
 err:
 	ida_simple_remove(&ftdi_devid_ida, priv->id);
 	return ret;
@@ -1726,6 +1800,8 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 
 	if (info->use_cbus_gpio_ctrl)
 		gpiochip_remove(&priv->cbus_gpio);
+
+	kobject_put(eeprom);
 
 	mutex_lock(&priv->io_mutex);
 	priv->intf = NULL;
