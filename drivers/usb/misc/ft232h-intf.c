@@ -1397,8 +1397,9 @@ static struct spi_board_info ftdi_spi_bus_info[] = {
 	.swnode  =  &ili9341_node,
     },
    {
-//    .modalias	= "spidev",
-    .modalias	= "w25q32",
+//    .modalias	= "spi-petra",    //use instead of spidev for spidev no-longer enumerates
+//    .modalias	= "w25q32",
+	  .modalias	= "xpt2046",
     .mode		= SPI_MODE_0,
 //    .mode		= SPI_MODE_0 | SPI_LSB_FIRST | SPI_CS_HIGH,
     .max_speed_hz	= 30000000,
