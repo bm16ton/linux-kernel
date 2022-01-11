@@ -40,7 +40,8 @@
 #define FTDI_SIO_SET_BITBANG 11 /* Set the bitbang mode */
 #define FTDI_SIO_READ_PINS		0x0c /* Read immediate value of pins */
 #define FTDI_SIO_READ_EEPROM		0x90 /* Read EEPROM */
-
+#define FTDI_SIO_SET_BITMODE_RESET  0x00
+#define FTDI_SIO_SET_BITMODE_BITBANG     0x01 	/*0x01 asynch bitbang, 0x02 MPSSE, 0x04 sync bb  */
 /* Interface indices for FT2232, FT2232H and FT4232H devices */
 #define INTERFACE_A		1
 #define INTERFACE_B		2
