@@ -22,6 +22,10 @@
 #include <linux/gpio/consumer.h>
 #include <linux/property.h>
 
+#include <linux/of.h>
+#include <linux/of_gpio.h>
+#include <linux/stringify.h>
+
 #include "fbtft.h"
 
 #define DRVNAME		"fb_ili9341"
@@ -155,25 +159,15 @@ static const struct spi_device_id ili9341_spi_id[] = {
 	{ "fb_ili9341", 0 },
 	{ }
 };
-
 MODULE_DEVICE_TABLE(spi, ili9341_spi_id);
 
-static const struct of_device_id ili9341_of_spi_match[] = {
-//	{ "ilitek,ili9341", 0 },
-//	{ "ili9341", 0 },
-//	{ "fb_ili9341", 0 },
-	{ .compatible = "ilitek,fb_ili9341" },
-	{ .compatible = "ilitek,ili9341" },
-	{ }
-};
-MODULE_DEVICE_TABLE(of, ili9341_of_spi_match);
-
-FBTFT_REGISTER_DRIVER(DRVNAME, "ilitek,ili9341", &display);
+FBTFT_REGISTER_DRIVER(DRVNAME, "fb_ili9341", &display);
 
 MODULE_ALIAS("spi:" DRVNAME);
 MODULE_ALIAS("platform:" DRVNAME);
 MODULE_ALIAS("spi:ili9341");
 MODULE_ALIAS("platform:ili9341");
+MODULE_ALIAS("ili9341");
 
 MODULE_DESCRIPTION("FB driver for the ILI9341 LCD display controller");
 MODULE_AUTHOR("Christian Vogelgsang");
