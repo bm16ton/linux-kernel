@@ -1126,11 +1126,11 @@ static int ads7846_setup_spi_msg(struct ads7846 *ts,
 
 #ifdef CONFIG_OF
 static const struct of_device_id ads7846_dt_ids[] = {
-	{ .compatible = "ti,tsc2046",	.data = (void *) 7846 },
-	{ .compatible = "ti,ads7843",	.data = (void *) 7843 },
-	{ .compatible = "ti,ads7845",	.data = (void *) 7845 },
-	{ .compatible = "ti,ads7846",	.data = (void *) 7846 },
-	{ .compatible = "ti,ads7873",	.data = (void *) 7873 },
+	{ .compatible = "tsc2046",	.data = (void *) 7846 },
+	{ .compatible = "ads7843",	.data = (void *) 7843 },
+	{ .compatible = "ads7845",	.data = (void *) 7845 },
+	{ .compatible = "ads7846",	.data = (void *) 7846 },
+	{ .compatible = "ads7873",	.data = (void *) 7873 },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ads7846_dt_ids);
@@ -1468,6 +1468,17 @@ static int ads7846_remove(struct spi_device *spi)
 	return 0;
 }
 
+static const struct spi_device_id ads7846_spi_ids[] = {
+	{ .name = "ads7843", (unsigned long)ads7846_probe },
+	{ .name = "ads7845", (unsigned long)ads7846_probe },
+	{ .name = "ads7846", (unsigned long)ads7846_probe },
+	{ .name = "ads7873", (unsigned long)ads7846_probe },
+	{ .name = "tsc2046", (unsigned long)ads7846_probe },
+	{ .name = "xpt2046", (unsigned long)ads7846_probe },
+	{},
+};
+MODULE_DEVICE_TABLE(spi, ads7846_spi_ids);
+
 static struct spi_driver ads7846_driver = {
 	.driver = {
 		.name	= "ads7846",
@@ -1476,6 +1487,7 @@ static struct spi_driver ads7846_driver = {
 	},
 	.probe		= ads7846_probe,
 	.remove		= ads7846_remove,
+	.id_table	= ads7846_spi_ids,
 };
 
 module_spi_driver(ads7846_driver);
