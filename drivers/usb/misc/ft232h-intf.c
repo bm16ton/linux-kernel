@@ -1561,6 +1561,7 @@ static int ft232h_intf_spi_remove(struct usb_interface *intf)
 
 	dev_dbg(dev, "%s: spi pdev %p\n", __func__, priv->spi_pdev);
 	gpiod_remove_lookup_table(priv->lookup_cs);
+
 	platform_device_unregister(priv->spi_pdev);
 	return 0;
 }
@@ -1779,6 +1780,7 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 
 	mutex_lock(&priv->io_mutex);
 	priv->intf = NULL;
+	priv->mpsse_gpio.base = -1;
 	priv->mpsse_gpio.names = NULL;
 	usb_set_intfdata(intf, NULL);
 	mutex_unlock(&priv->io_mutex);
