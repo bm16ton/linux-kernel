@@ -129,11 +129,6 @@
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
 
-volatile int sysfs_value = 0;
-
-static struct kobject *eeprom;
-int			eepromdata[FTDI_MAX_EEPROM_SIZE];
-
 int usb_wait_msec = 0;
 module_param(usb_wait_msec, int, S_IRUSR | S_IWUSR);
 MODULE_PARM_DESC(usb_wait_msec, "Wait after USB transfer in msec");
@@ -182,28 +177,6 @@ struct ft232h_intf_priv {
 	u8			eeprom[FTDI_MAX_EEPROM_SIZE];
 };
 
-/*
-** This function will be called when we read the sysfs file
-*/
-static ssize_t sysfs_show(struct kobject *kobj, 
-                struct kobj_attribute *attr, char *buf)
-{
-//		eepromdata = 12;
-//        return sprintf(buf, "%d\n", eepromdata);
-		 return sprintf(buf, "todo eeprom dump\n");
-}
-/*
-** This function will be called when we write the sysfsfs file
-*/
-static ssize_t sysfs_store(struct kobject *kobj, 
-                struct kobj_attribute *attr, const char *buf, size_t count)
-{
- //       pr_info("Sysfs - Write!!!\n");
-        sscanf(buf, "%d", &eepromdata);
-        return count;
-}
-
-struct kobj_attribute sysfs_attribute = __ATTR(eeprom, 0665, sysfs_show, sysfs_store);
 
 /* Device info struct used for device specific init. */
 struct ft232h_intf_info {
@@ -217,6 +190,42 @@ struct ft232h_intf_info {
 };
 
 static DEFINE_IDA(ftdi_devid_ida);
+
+static ssize_t eeprom_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct ft232h_intf_priv *priv = dev_get_drvdata(dev);
+//	int ret2;
+
+//		ret2 = priv->eeprom;
+		return snprintf(buf, 256, "%hhd\n", priv->eeprom);
+//		return scnprintf(buf, PAGE_SIZE, "%hhd\n", priv->eeprom);
+}
+
+
+static ssize_t eeprom_store(struct device *dev,
+				   struct device_attribute *attr,
+				   const char *valbuf, size_t count)
+{
+        return count;
+}
+static DEVICE_ATTR_RW(eeprom);
+
+static int create_sysfs_attrs(struct usb_interface *intf)
+{
+	int retval = 0;
+
+			retval = device_create_file(&intf->dev,
+						    &dev_attr_eeprom);
+
+	return retval;
+}
+
+static void remove_sysfs_attrs(struct usb_interface *intf)
+{
+
+			device_remove_file(&intf->dev, &dev_attr_eeprom);
+}
 
 /* Use baudrate calculation borrowed from libftdi */
 static int ftdi_to_clkbits(int baudrate, unsigned int clk, int clk_div,
@@ -1661,7 +1670,6 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	unsigned int i;
 	int ret = 0;
 	int inf;
-	int error = 0;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -1689,21 +1697,7 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 		}
 	}
 
-	eeprom = kobject_create_and_add("mpsse_sysfs",kernel_kobj);
-
-	if(eeprom == NULL) {
-		dev_info(&intf->dev, "failed to create the sysfs directory mpsse_sysfs\n");
-		return -ENOMEM;
-	} else {
-		dev_info(&intf->dev, "successfully created /sys/kernel/mpsse_sysfs directory\n");
-	}
-
-	error = sysfs_create_file(eeprom, &sysfs_attribute.attr);
-	if (error) {
-		dev_info(&intf->dev, "failed to create the sysfs file\n");
-	} else {
-		dev_info(&intf->dev, "successfully created sysfs file mpsse_sysfs/eeprom\n");
-	}
+	create_sysfs_attrs(intf);
 
 	iface_desc = intf->cur_altsetting;
 
@@ -1771,6 +1765,8 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 	struct ft232h_intf_priv *priv = usb_get_intfdata(intf);
 	const struct ft232h_intf_info *info;
 
+	remove_sysfs_attrs(intf);
+
 	info = (struct ft232h_intf_info *)priv->usb_dev_id->driver_info;
 	if (info && info->remove)
 		info->remove(intf);
@@ -1780,8 +1776,6 @@ static void ft232h_intf_disconnect(struct usb_interface *intf)
 
 	if (info->use_cbus_gpio_ctrl)
 		gpiochip_remove(&priv->cbus_gpio);
-
-	kobject_put(eeprom);
 
 	mutex_lock(&priv->io_mutex);
 	priv->intf = NULL;

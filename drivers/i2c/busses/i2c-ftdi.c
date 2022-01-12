@@ -32,9 +32,6 @@ const size_t FTDI_IO_BUFFER_SIZE = 65536;
 const u16 FTDI_BIT_MODE_RESET = 0x00ff;
 const u16 FTDI_BIT_MODE_MPSSE = 0x02ff;
 
-//static struct usb_device *dev;
-//static struct usb_interface *intf;
-
 struct ftdi_usb {
 	struct usb_device *udev;
 	struct usb_interface *interface;
@@ -50,23 +47,11 @@ struct ftdi_usb {
 static ssize_t i2cfreq_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
-//	struct usb_interface *interface = to_usb_interface(dev);
-//	struct ftdi_usb *ftdi = usb_get_intfdata(interface);
 	struct ftdi_usb *ftdi = dev_get_drvdata(dev);
 	int ret2;
-//	ftdi = kzalloc(sizeof(*ftdi), GFP_KERNEL);
-//	if (!ftdi)
-//		return -ENOMEM;
-
-//	ftdi->udev = usb_get_dev(dev);
-//	ftdi->interface = usb_get_intf(interface);
-
 
 		ret2 = ftdi->freq;
- 		 
-//		dev_info(&intf->dev, "show i2cftdi freq %d\n", ret2);
-//        return sprintf(buf, "%d\n", eepromdata);
-//		 return sprintf(buf, data);
+
 		return scnprintf(buf, PAGE_SIZE, "%d\n", ret2);
 }
 
@@ -77,17 +62,12 @@ static ssize_t i2cfreq_store(struct device *dev,
 				   struct device_attribute *attr,
 				   const char *valbuf, size_t count)
 {
- //       pr_info("Sysfs - Write!!!\n");
- //       sscanf(buf, "%d", &data);
         return count;
 }
 static DEVICE_ATTR_RW(i2cfreq);
-//struct kobj_attribute sysfs_attribute = __ATTR(i2cfreq, 0665, sysfs_show, sysfs_store);
 
 static int create_sysfs_attrs(struct usb_interface *interface)
 {
-//	struct usb_device *dev = interface_to_usbdev(interface);
-//	struct ftdi_usb *ftdi;
 	int retval = 0;
 
 			retval = device_create_file(&interface->dev,
@@ -98,9 +78,6 @@ static int create_sysfs_attrs(struct usb_interface *interface)
 
 static void remove_sysfs_attrs(struct usb_interface *interface)
 {
-//	struct usb_device *dev = interface_to_usbdev(interface);
-//	struct ftdi_usb *ftdi;
-	/* XXX see create_sysfs_attrs */
 
 			device_remove_file(&interface->dev, &dev_attr_i2cfreq);
 }
@@ -736,22 +713,6 @@ static int ftdi_usb_probe(struct usb_interface *interface,
 	 	}
 	}
 
-/*	i2cfreq = kobject_create_and_add("mpsse_i2c",kernel_kobj);
-
-	if(i2cfreq == NULL) {
-		dev_info(&interface->dev, "failed to create the sysfs directory mpsse_sysfs\n");
-		return -ENOMEM;
-	} else {
-		dev_info(&interface->dev, "successfully created /sys/kernel/mpsse_sysfs directory\n");
-	}
-
-	error = sysfs_create_file(i2cfreq, &sysfs_attribute.attr);
-	if (error) {
-		dev_info(&interface->dev, "failed to create the sysfs file\n");
-	} else {
-		dev_info(&interface->dev, "successfully created sysfs file mpsse_i2c/i2cfreq\n");
-	}
-*/
 	create_sysfs_attrs(interface);
 
 	ftdi->io_timeout = FTDI_IO_TIMEOUT;
