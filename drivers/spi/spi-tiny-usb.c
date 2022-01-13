@@ -23,7 +23,7 @@
 //16ton
 #include <linux/delay.h>
 #include <linux/iopoll.h>
-
+#include <linux/irq.h>
 
 
 
@@ -40,7 +40,7 @@
 #define VID 0x16c1
 #define PID 0x06db
 
-const char *gpio_names[] = { "led", "ext" };
+const char *gpio_names[] = { "led", "ext", "dc", "irq" };
 
 /* Structure to hold all of our device specific stuff */
 struct spi_tiny_usb {
@@ -257,6 +257,18 @@ usb_write(struct spi_tiny_usb *dev, int cmd, int value, int index, void *data, i
 			       value, index, data, len, 2000);
 }
 
+unsigned int GPIO_irqNumber;
+
+static int
+_to_irq(struct gpio_chip *chip,
+        unsigned offset)
+{
+//   printk("GPIO to IRQ: 2");
+   GPIO_irqNumber = gpio_to_irq(offset);
+   printk("GPIO_irqNumber = %d\n", GPIO_irqNumber);
+   return GPIO_irqNumber;
+}
+
 static int spi_tiny_usb_probe(struct usb_interface *interface,
 			      const struct usb_device_id *id)
 {
@@ -353,9 +365,11 @@ static int spi_tiny_usb_probe(struct usb_interface *interface,
 
 
 	ret = usb_submit_urb(priv->urb, GFP_KERNEL);
-	if (ret)
+	if (ret) {
 	    dev_info(&interface->dev, "spi-tiny-usb priv urb gfp_kernel failedr\n");
-//		goto error2;
+			goto error2;
+	}
+
 	dev_info(&interface->dev, "started USB interrupts handler\n");
 
 	// GPIOs
@@ -368,8 +382,9 @@ static int spi_tiny_usb_probe(struct usb_interface *interface,
 	priv->gpio_chip.get = spi_tiny_usb_gpio_get;
 	priv->gpio_chip.set = spi_tiny_usb_gpio_set;
 	priv->gpio_chip.base = -1;
-	priv->gpio_chip.ngpio = 2;
+	priv->gpio_chip.ngpio = 4;
 	priv->gpio_chip.names = gpio_names;
+    priv->gpio_chip.to_irq = _to_irq;
 
 	dev_dbg(&interface->dev, "adding GPIO interface\n");
 	ret = gpiochip_add(&priv->gpio_chip);
