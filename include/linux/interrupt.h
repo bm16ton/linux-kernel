@@ -524,6 +524,7 @@ enum
 	SCHED_SOFTIRQ,
 	HRTIMER_SOFTIRQ,
 	RCU_SOFTIRQ,    /* Preferable RCU should always be the last softirq */
+	MPSSE_SOFT_IRQ,
 
 	NR_SOFTIRQS
 };
