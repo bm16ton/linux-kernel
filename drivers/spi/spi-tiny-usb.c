@@ -23,7 +23,6 @@
 //16ton
 #include <linux/delay.h>
 #include <linux/iopoll.h>
-#include <linux/irq.h>
 
 
 
@@ -257,18 +256,6 @@ usb_write(struct spi_tiny_usb *dev, int cmd, int value, int index, void *data, i
 			       value, index, data, len, 2000);
 }
 
-unsigned int GPIO_irqNumber;
-
-static int
-_to_irq(struct gpio_chip *chip,
-        unsigned offset)
-{
-//   printk("GPIO to IRQ: 2");
-   GPIO_irqNumber = gpio_to_irq(offset);
-   printk("GPIO_irqNumber = %d\n", GPIO_irqNumber);
-   return GPIO_irqNumber;
-}
-
 static int spi_tiny_usb_probe(struct usb_interface *interface,
 			      const struct usb_device_id *id)
 {
@@ -384,7 +371,6 @@ static int spi_tiny_usb_probe(struct usb_interface *interface,
 	priv->gpio_chip.base = -1;
 	priv->gpio_chip.ngpio = 4;
 	priv->gpio_chip.names = gpio_names;
-    priv->gpio_chip.to_irq = _to_irq;
 
 	dev_dbg(&interface->dev, "adding GPIO interface\n");
 	ret = gpiochip_add(&priv->gpio_chip);
