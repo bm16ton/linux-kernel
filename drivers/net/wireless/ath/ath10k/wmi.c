@@ -21,13 +21,6 @@
 #include "hif.h"
 #include "txrx.h"
 
-int ath_chaninfo_error;
-module_param_named(chaninfo_error, ath_chaninfo_error, int, 0444);
-MODULE_PARM_DESC(chaninfo_error, "Enable received chan info event without a scan request, ignoring");
-
-EXPORT_SYMBOL(ath_chaninfo_error);
-
-
 #define ATH10K_WMI_BARRIER_ECHO_ID 0xBA991E9
 #define ATH10K_WMI_BARRIER_TIMEOUT_HZ (3 * HZ)
 #define ATH10K_WMI_DFS_CONF_TIMEOUT_HZ (HZ / 6)
@@ -2601,7 +2594,7 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 		dev_kfree_skb(skb);
 		return 0;
 	}
-
+	
 //	status->band = phy_mode_to_band(phy_mode, channel);
 
 	if (phy_mode == MODE_11B && status->band == NL80211_BAND_5GHZ)
@@ -2843,10 +2836,8 @@ void ath10k_wmi_event_chan_info(struct ath10k *ar, struct sk_buff *skb)
 	switch (ar->scan.state) {
 	case ATH10K_SCAN_IDLE:
 	case ATH10K_SCAN_STARTING:
-		if (ath_chaninfo_error) {
 		ath10k_dbg(ar, ATH10K_DBG_WMI, "received chan info event without a scan request, ignoring\n");
 		goto exit;
-		}
 	case ATH10K_SCAN_RUNNING:
 	case ATH10K_SCAN_ABORTING:
 		break;

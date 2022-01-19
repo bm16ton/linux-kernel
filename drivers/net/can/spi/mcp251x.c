@@ -1508,6 +1508,7 @@ static struct spi_driver mcp251x_can_driver = {
 };
 module_spi_driver(mcp251x_can_driver);
 
+MODULE_ALIAS("mcp2515");
 MODULE_AUTHOR("Chris Elston <celston@katalix.com>, "
 	      "Christian Pellegrin <chripell@evolware.org>");
 MODULE_DESCRIPTION("Microchip 251x/25625 CAN driver");

@@ -21,46 +21,6 @@
 static DEFINE_IDA(fpga_mgr_ida);
 static struct class *fpga_mgr_class;
 
-static BLOCKING_NOTIFIER_HEAD(fpga_mgr_notifier_list);
-
-static int fpga_mgr_notify_registered(struct device *dev, void *data)
-{
-	struct fpga_manager *mgr = to_fpga_manager(dev);
-
-	blocking_notifier_call_chain(&fpga_mgr_notifier_list,
-				     FPGA_MGR_ADD, mgr);
-	return 0;
-}
-
-/**
- * fpga_mgr_register_mgr_notifier() - register fpga manager notifier callback
- * @nb: pointer to the notifier block for the callback events.
- *
- * Add a notifier callback for FPGA manager changes. These changes are
- * either FPGA manager being added or removed.
- */
-void fpga_mgr_register_mgr_notifier(struct notifier_block *nb)
-{
-	blocking_notifier_chain_register(&fpga_mgr_notifier_list, nb);
-
-	class_for_each_device(fpga_mgr_class, NULL, NULL,
-			      fpga_mgr_notify_registered);
-}
-EXPORT_SYMBOL_GPL(fpga_mgr_register_mgr_notifier);
-
-/**
- * fpga_mgr_unregister_mgr_notifier() - unregister a notifier callback
- * @nb: pointer to the notifier block for the callback events.
- *
- * Remove a notifier callback. fpga_mgr_register_mgr_notifier() must have
- * been previously called for this function to work properly.
- */
-void fpga_mgr_unregister_mgr_notifier(struct notifier_block *nb)
-{
-	blocking_notifier_chain_unregister(&fpga_mgr_notifier_list, nb);
-}
-EXPORT_SYMBOL_GPL(fpga_mgr_unregister_mgr_notifier);
-
 struct fpga_mgr_devres {
 	struct fpga_manager *mgr;
 };
@@ -776,8 +736,6 @@ int fpga_mgr_register(struct fpga_manager *mgr)
 
 	dev_info(&mgr->dev, "%s registered\n", mgr->name);
 
-	blocking_notifier_call_chain(&fpga_mgr_notifier_list,
-				     FPGA_MGR_ADD, mgr);
 	return 0;
 
 error_device:
@@ -797,8 +755,6 @@ void fpga_mgr_unregister(struct fpga_manager *mgr)
 {
 	dev_info(&mgr->dev, "%s %s\n", __func__, mgr->name);
 
-	blocking_notifier_call_chain(&fpga_mgr_notifier_list,
-				     FPGA_MGR_REMOVE, mgr);
 	/*
 	 * If the low level driver provides a method for putting fpga into
 	 * a desired state upon unregister, do it.

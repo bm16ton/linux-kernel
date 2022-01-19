@@ -1,1 +1,0 @@
-/home/maddocks/linux-5.15.12/tools/spi/../../include/uapi/linux/spi/spidev.h

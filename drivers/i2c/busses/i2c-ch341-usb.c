@@ -1273,7 +1273,7 @@ module_usb_driver(ch341_usb_driver);
 
 // ----- usb layer end ---------------------------------------------------
 
-MODULE_ALIAS("i2c:ch341");
+MODULE_ALIAS("i2c:i2c-ch341-usb");
 MODULE_AUTHOR("Gunar Schorcht <gunar@schorcht.net>");
 MODULE_DESCRIPTION("i2c-ch341-usb driver v1.0.0");
 MODULE_LICENSE("GPL");

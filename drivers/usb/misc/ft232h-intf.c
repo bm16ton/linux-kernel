@@ -1240,7 +1240,7 @@ static const struct ft232h_intf_ops ft232h_intf_ops = {
 /*
  * FPGA config interface: FPP via FT245 FIFO
  */
-#define FPP_INTF_DEVNAME	"ftdi-fifo-fpp-mgr"
+#define FPP_INTF_DEVNAME	"spi-ftdi-mpsse"
 
 static struct dev_io_desc_data fpga_cfg_fpp_dev_io[2] = {
 	{ "nconfig", 0, GPIO_ACTIVE_LOW },
@@ -1360,7 +1360,7 @@ static int ft232h_intf_fpp_remove(struct usb_interface *intf)
 /*
  * FPGA config interface: PS-SPI via MPSSE
  */
-#define SPI_INTF_DEVNAME	"ftdi-mpsse-spi"
+#define SPI_INTF_DEVNAME	"spi-ftdi-mpsse"
 
 
 static struct dev_io_desc_data ftdi_spi_bus_dev_io[] = {
@@ -1377,6 +1377,13 @@ static const struct mpsse_spi_dev_data ftdi_spi_dev_data[] = {
 	},
 };
 
+static const struct property_entry mcp2515_properties[] = {
+	PROPERTY_ENTRY_U32("clock-frequency", 8000000),
+//	PROPERTY_ENTRY_U32("xceiver", 1),
+//	PROPERTY_ENTRY_U32("gpio-controller", 3),
+	{}
+};
+
 static const struct property_entry ili9341_properties[] = {
 	PROPERTY_ENTRY_U32("rotate", 270),
 	PROPERTY_ENTRY_BOOL("bgr"),
@@ -1387,28 +1394,30 @@ static const struct property_entry ili9341_properties[] = {
 	{}
 };
 
-static const struct software_node ili9341_node = {
-	.properties = ili9341_properties,
+static const struct software_node mcp2515_node = {
+	.properties = mcp2515_properties,
 };
 
 static struct spi_board_info ftdi_spi_bus_info[] = {
     {
 //    .modalias	= "yx240qv29",
-	.modalias	= "ili9341",
-//	.modalias	= "mcp251x",
+//	.modalias	= "ili9341",
+	.modalias	= "mcp2515",
 //	.modalias	= "spidev",
     .mode		= SPI_MODE_0,
-    .max_speed_hz	= 32000000,
+    .max_speed_hz	= 8000000,
+//    .max_speed_hz	= 30000000,
     .bus_num	= 0,
     .chip_select	= 0,
     .platform_data	= ftdi_spi_dev_data,
 // 	.properties	= ili9341_properties,    //changed from properties to swnode i dunno aroun kernel 5.15ish
-	.swnode  =  &ili9341_node,
+	.swnode  =  &mcp2515_node,
+	.irq     = 148,
     },
    {
 //    .modalias	= "spi-petra",    //use instead of spidev for spidev no-longer enumerates
 //    .modalias	= "w25q32",
-	  .modalias	= "xpt2046",
+	  .modalias	= "spidev",
     .mode		= SPI_MODE_0,
 //    .mode		= SPI_MODE_0 | SPI_LSB_FIRST | SPI_CS_HIGH,
     .max_speed_hz	= 30000000,

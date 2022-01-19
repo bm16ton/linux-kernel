@@ -17,15 +17,6 @@
 #include <linux/delay.h>
 #include <video/mipi_display.h>
 
-#include <linux/spi/spi.h>
-
-#include <linux/gpio/consumer.h>
-#include <linux/property.h>
-
-#include <linux/of.h>
-#include <linux/of_gpio.h>
-#include <linux/stringify.h>
-
 #include "fbtft.h"
 
 #define DRVNAME		"fb_ili9341"
@@ -154,20 +145,12 @@ static struct fbtft_display display = {
 	},
 };
 
-static const struct spi_device_id ili9341_spi_id[] = {
-	{ "ili9341", 0 },
-	{ "fb_ili9341", 0 },
-	{ }
-};
-MODULE_DEVICE_TABLE(spi, ili9341_spi_id);
-
-FBTFT_REGISTER_DRIVER(DRVNAME, "fb_ili9341", &display);
+FBTFT_REGISTER_DRIVER(DRVNAME, "ilitek,ili9341", &display);
 
 MODULE_ALIAS("spi:" DRVNAME);
 MODULE_ALIAS("platform:" DRVNAME);
 MODULE_ALIAS("spi:ili9341");
 MODULE_ALIAS("platform:ili9341");
-MODULE_ALIAS("ili9341");
 
 MODULE_DESCRIPTION("FB driver for the ILI9341 LCD display controller");
 MODULE_AUTHOR("Christian Vogelgsang");
