@@ -39,7 +39,7 @@
 #define VID 0x16c1
 #define PID 0x06db
 
-const char *gpio_names[] = { "led", "ext", "dc", "irq" };
+const char *gpio_names[] = { "led", "gp" };
 
 /* Structure to hold all of our device specific stuff */
 struct spi_tiny_usb {
@@ -298,7 +298,7 @@ static int spi_tiny_usb_probe(struct usb_interface *interface,
 	priv->master->num_chipselect = 1;
 	priv->master->max_speed_hz = 48 * 1000 * 1000 / 2;
 	priv->master->min_speed_hz = 48 * 1000 * 1000 / 256;
-	// priv->master->dev.platform_data = priv;
+	priv->master->dev.platform_data = priv;
 	spi_master_set_devdata(priv->master, priv);
 
 	ret = spi_register_master(priv->master);
@@ -369,7 +369,7 @@ static int spi_tiny_usb_probe(struct usb_interface *interface,
 	priv->gpio_chip.get = spi_tiny_usb_gpio_get;
 	priv->gpio_chip.set = spi_tiny_usb_gpio_set;
 	priv->gpio_chip.base = -1;
-	priv->gpio_chip.ngpio = 4;
+	priv->gpio_chip.ngpio = 2;
 	priv->gpio_chip.names = gpio_names;
 
 	dev_dbg(&interface->dev, "adding GPIO interface\n");
