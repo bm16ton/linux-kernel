@@ -1402,16 +1402,16 @@ static struct spi_board_info ftdi_spi_bus_info[] = {
     {
 //    .modalias	= "yx240qv29",
 //	.modalias	= "ili9341",
-	.modalias	= "mcp2515",
-//	.modalias	= "spidev",
-    .mode		= SPI_MODE_0,
-    .max_speed_hz	= 8000000,
+//	.modalias	= "mcp2515",
+	.modalias	= "esp32_spi",
+    .mode		= SPI_MODE_2,
+    .max_speed_hz	= 30000000,
 //    .max_speed_hz	= 30000000,
     .bus_num	= 0,
     .chip_select	= 0,
     .platform_data	= ftdi_spi_dev_data,
 // 	.properties	= ili9341_properties,    //changed from properties to swnode i dunno aroun kernel 5.15ish
-	.swnode  =  &mcp2515_node,
+//	.swnode  =  &mcp2515_node,
 	.irq     = 148,
     },
    {
