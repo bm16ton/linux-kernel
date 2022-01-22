@@ -22,6 +22,7 @@
 #include "hif.h"
 #include "htc.h"
 #include "snoc.h"
+#include "mac.h"
 
 #define ATH10K_SNOC_RX_POST_RETRY_MS 50
 #define CE_POLL_PIPE 4
@@ -1367,6 +1368,7 @@ int ath10k_snoc_fw_indication(struct ath10k *ar, u64 type)
 	case ATH10K_QMI_EVENT_FW_DOWN_IND:
 		set_bit(ATH10K_SNOC_FLAG_RECOVERY, &ar_snoc->flags);
 		set_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags);
+		ath10k_mac_tx_lock(ar, ATH10K_TX_PAUSE_FW_DOWN);
 		break;
 	default:
 		ath10k_err(ar, "invalid fw indication: %llx\n", type);
