@@ -465,6 +465,13 @@ static void dpu_encoder_phys_vid_destroy(struct dpu_encoder_phys *phys_enc)
 	kfree(phys_enc);
 }
 
+static void dpu_encoder_phys_vid_get_hw_resources(
+		struct dpu_encoder_phys *phys_enc,
+		struct dpu_encoder_hw_resources *hw_res)
+{
+	hw_res->intfs[phys_enc->intf_idx - INTF_0] = INTF_MODE_VIDEO;
+}
+
 static int dpu_encoder_phys_vid_wait_for_vblank(
 		struct dpu_encoder_phys *phys_enc)
 {
@@ -673,6 +680,7 @@ static void dpu_encoder_phys_vid_init_ops(struct dpu_encoder_phys_ops *ops)
 	ops->enable = dpu_encoder_phys_vid_enable;
 	ops->disable = dpu_encoder_phys_vid_disable;
 	ops->destroy = dpu_encoder_phys_vid_destroy;
+	ops->get_hw_resources = dpu_encoder_phys_vid_get_hw_resources;
 	ops->control_vblank_irq = dpu_encoder_phys_vid_control_vblank_irq;
 	ops->wait_for_commit_done = dpu_encoder_phys_vid_wait_for_commit_done;
 	ops->wait_for_vblank = dpu_encoder_phys_vid_wait_for_vblank;
@@ -690,17 +698,17 @@ struct dpu_encoder_phys *dpu_encoder_phys_vid_init(
 {
 	struct dpu_encoder_phys *phys_enc = NULL;
 	struct dpu_encoder_irq *irq;
-	int i, ret = 0;
+	int i;
 
 	if (!p) {
-		ret = -EINVAL;
-		goto fail;
+		DPU_ERROR("failed to create encoder due to invalid parameter\n");
+		return ERR_PTR(-EINVAL);
 	}
 
 	phys_enc = kzalloc(sizeof(*phys_enc), GFP_KERNEL);
 	if (!phys_enc) {
-		ret = -ENOMEM;
-		goto fail;
+		DPU_ERROR("failed to create encoder due to memory allocation error\n");
+		return ERR_PTR(-ENOMEM);
 	}
 
 	phys_enc->hw_mdptop = p->dpu_kms->hw_mdp;
@@ -740,11 +748,4 @@ struct dpu_encoder_phys *dpu_encoder_phys_vid_init(
 	DPU_DEBUG_VIDENC(phys_enc, "created intf idx:%d\n", p->intf_idx);
 
 	return phys_enc;
-
-fail:
-	DPU_ERROR("failed to create encoder\n");
-	if (phys_enc)
-		dpu_encoder_phys_vid_destroy(phys_enc);
-
-	return ERR_PTR(ret);
 }

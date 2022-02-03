@@ -152,10 +152,15 @@ void dpu_vbif_set_ot_limit(struct dpu_kms *dpu_kms,
 	struct dpu_hw_mdp *mdp;
 	bool forced_on = false;
 	u32 ot_lim;
-	int ret;
+	int ret, i;
 
 	mdp = dpu_kms->hw_mdp;
-	vbif = dpu_rm_get_vbif(&dpu_kms->rm, params->vbif_idx);
+
+	for (i = 0; i < ARRAY_SIZE(dpu_kms->hw_vbif); i++) {
+		if (dpu_kms->hw_vbif[i] &&
+				dpu_kms->hw_vbif[i]->idx == params->vbif_idx)
+			vbif = dpu_kms->hw_vbif[i];
+	}
 
 	if (!vbif || !mdp) {
 		DRM_DEBUG_ATOMIC("invalid arguments vbif %d mdp %d\n",
@@ -211,7 +216,14 @@ void dpu_vbif_set_qos_remap(struct dpu_kms *dpu_kms,
 	}
 	mdp = dpu_kms->hw_mdp;
 
-	vbif = dpu_rm_get_vbif(&dpu_kms->rm, params->vbif_idx);
+	for (i = 0; i < ARRAY_SIZE(dpu_kms->hw_vbif); i++) {
+		if (dpu_kms->hw_vbif[i] &&
+				dpu_kms->hw_vbif[i]->idx == params->vbif_idx) {
+			vbif = dpu_kms->hw_vbif[i];
+			break;
+		}
+	}
+
 	if (!vbif || !vbif->cap) {
 		DPU_ERROR("invalid vbif %d\n", params->vbif_idx);
 		return;
@@ -249,8 +261,8 @@ void dpu_vbif_clear_errors(struct dpu_kms *dpu_kms)
 	struct dpu_hw_vbif *vbif;
 	u32 i, pnd, src;
 
-	for (i = VBIF_0; i < VBIF_MAX; i++) {
-		vbif = dpu_rm_get_vbif(&dpu_kms->rm, i);
+	for (i = 0; i < ARRAY_SIZE(dpu_kms->hw_vbif); i++) {
+		vbif = dpu_kms->hw_vbif[i];
 		if (vbif && vbif->ops.clear_errors) {
 			vbif->ops.clear_errors(vbif, &pnd, &src);
 			if (pnd || src) {
@@ -266,8 +278,8 @@ void dpu_vbif_init_memtypes(struct dpu_kms *dpu_kms)
 	struct dpu_hw_vbif *vbif;
 	int i, j;
 
-	for (i = VBIF_0; i < VBIF_MAX; i++) {
-		vbif = dpu_rm_get_vbif(&dpu_kms->rm, i);
+	for (i = 0; i < ARRAY_SIZE(dpu_kms->hw_vbif); i++) {
+		vbif = dpu_kms->hw_vbif[i];
 		if (vbif && vbif->cap && vbif->ops.set_mem_type) {
 			for (j = 0; j < vbif->cap->memtype_count; j++)
 				vbif->ops.set_mem_type(

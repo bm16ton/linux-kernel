@@ -382,7 +382,7 @@ static struct sir_driver sir_tty_drv = {
  *     The Swiss army knife of system calls :-)
  *
  */
-static int irtty_ioctl(struct tty_struct *tty, struct file *file, unsigned int cmd, unsigned long arg)
+static int irtty_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
 {
 	struct irtty_info { char name[6]; } info;
 	struct sir_dev *dev;

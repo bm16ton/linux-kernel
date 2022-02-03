@@ -14,12 +14,12 @@
 #include <linux/completion.h>
 #include <linux/scatterlist.h>
 #include <linux/gpio/consumer.h>
-#include <linux/ptp_clock_kernel.h>
 
 #include <uapi/linux/spi/spi.h>
 
 struct dma_chan;
 struct software_node;
+struct ptp_system_timestamp;
 struct spi_controller;
 struct spi_transfer;
 struct spi_controller_mem_ops;
@@ -758,8 +758,6 @@ extern int spi_register_controller(struct spi_controller *ctlr);
 extern int devm_spi_register_controller(struct device *dev,
 					struct spi_controller *ctlr);
 extern void spi_unregister_controller(struct spi_controller *ctlr);
-
-extern struct spi_controller *spi_busnum_to_master(u16 busnum);
 
 /*
  * SPI resource management while processing a SPI message

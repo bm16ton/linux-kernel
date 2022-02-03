@@ -207,8 +207,9 @@ static const struct file_operations test_active_fops = {
 	.write = dp_test_active_write
 };
 
-static void dp_debug_init(struct dp_debug *dp_debug, struct drm_minor *minor)
+static int dp_debug_init(struct dp_debug *dp_debug, struct drm_minor *minor)
 {
+	int rc = 0;
 	struct dp_debug_private *debug = container_of(dp_debug,
 			struct dp_debug_private, dp_debug);
 
@@ -228,15 +229,17 @@ static void dp_debug_init(struct dp_debug *dp_debug, struct drm_minor *minor)
 			debug, &dp_test_type_fops);
 
 	debug->root = minor->debugfs_root;
+
+	return rc;
 }
 
 struct dp_debug *dp_debug_get(struct device *dev, struct dp_panel *panel,
 		struct dp_usbpd *usbpd, struct dp_link *link,
 		struct drm_connector *connector, struct drm_minor *minor)
 {
+	int rc = 0;
 	struct dp_debug_private *debug;
 	struct dp_debug *dp_debug;
-	int rc;
 
 	if (!dev || !panel || !usbpd || !link) {
 		DRM_ERROR("invalid input\n");
@@ -263,7 +266,11 @@ struct dp_debug *dp_debug_get(struct device *dev, struct dp_panel *panel,
 	dp_debug->hdisplay = 0;
 	dp_debug->vrefresh = 0;
 
-	dp_debug_init(dp_debug, minor);
+	rc = dp_debug_init(dp_debug, minor);
+	if (rc) {
+		devm_kfree(dev, debug);
+		goto error;
+	}
 
 	return dp_debug;
  error:

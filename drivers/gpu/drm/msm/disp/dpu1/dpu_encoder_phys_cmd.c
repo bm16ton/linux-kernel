@@ -71,13 +71,6 @@ static void _dpu_encoder_phys_cmd_update_intf_cfg(
 	intf_cfg.stream_sel = cmd_enc->stream_sel;
 	intf_cfg.mode_3d = dpu_encoder_helper_get_3d_blend_mode(phys_enc);
 	ctl->ops.setup_intf_cfg(ctl, &intf_cfg);
-
-	/* setup which pp blk will connect to this intf */
-	if (test_bit(DPU_CTL_ACTIVE_CFG, &ctl->caps->features) && phys_enc->hw_intf->ops.bind_pingpong_blk)
-		phys_enc->hw_intf->ops.bind_pingpong_blk(
-				phys_enc->hw_intf,
-				true,
-				phys_enc->hw_pp->idx);
 }
 
 static void dpu_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
@@ -514,7 +507,6 @@ static void dpu_encoder_phys_cmd_disable(struct dpu_encoder_phys *phys_enc)
 {
 	struct dpu_encoder_phys_cmd *cmd_enc =
 		to_dpu_encoder_phys_cmd(phys_enc);
-	struct dpu_hw_ctl *ctl;
 
 	if (!phys_enc->hw_pp) {
 		DPU_ERROR("invalid encoder\n");
@@ -531,19 +523,6 @@ static void dpu_encoder_phys_cmd_disable(struct dpu_encoder_phys *phys_enc)
 
 	if (phys_enc->hw_pp->ops.enable_tearcheck)
 		phys_enc->hw_pp->ops.enable_tearcheck(phys_enc->hw_pp, false);
-
-	if (dpu_encoder_phys_cmd_is_master(phys_enc)) {
-		if (phys_enc->hw_intf->ops.bind_pingpong_blk) {
-			phys_enc->hw_intf->ops.bind_pingpong_blk(
-					phys_enc->hw_intf,
-					false,
-					phys_enc->hw_pp->idx);
-
-			ctl = phys_enc->hw_ctl;
-			ctl->ops.update_pending_flush_intf(ctl, phys_enc->intf_idx);
-		}
-	}
-
 	phys_enc->enable_state = DPU_ENC_DISABLED;
 }
 
@@ -553,6 +532,13 @@ static void dpu_encoder_phys_cmd_destroy(struct dpu_encoder_phys *phys_enc)
 		to_dpu_encoder_phys_cmd(phys_enc);
 
 	kfree(cmd_enc);
+}
+
+static void dpu_encoder_phys_cmd_get_hw_resources(
+		struct dpu_encoder_phys *phys_enc,
+		struct dpu_encoder_hw_resources *hw_res)
+{
+	hw_res->intfs[phys_enc->intf_idx - INTF_0] = INTF_MODE_CMD;
 }
 
 static void dpu_encoder_phys_cmd_prepare_for_kickoff(
@@ -750,6 +736,7 @@ static void dpu_encoder_phys_cmd_init_ops(
 	ops->enable = dpu_encoder_phys_cmd_enable;
 	ops->disable = dpu_encoder_phys_cmd_disable;
 	ops->destroy = dpu_encoder_phys_cmd_destroy;
+	ops->get_hw_resources = dpu_encoder_phys_cmd_get_hw_resources;
 	ops->control_vblank_irq = dpu_encoder_phys_cmd_control_vblank_irq;
 	ops->wait_for_commit_done = dpu_encoder_phys_cmd_wait_for_commit_done;
 	ops->prepare_for_kickoff = dpu_encoder_phys_cmd_prepare_for_kickoff;
