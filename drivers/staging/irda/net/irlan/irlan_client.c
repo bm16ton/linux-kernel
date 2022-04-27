@@ -36,6 +36,7 @@
 #include <linux/if_arp.h>
 #include <linux/bitops.h>
 #include <net/arp.h>
+#include <linux/version.h>
 
 #include <asm/byteorder.h>
 
@@ -507,8 +508,7 @@ static void irlan_check_response_param(struct irlan_cb *self, char *param,
 	if (strcmp(param, "FILTER_ENTRY") == 0) {
 		bytes = value;
 		pr_debug("Ethernet address = %pM\n", bytes);
-		for (i = 0; i < 6; i++)
-			self->dev->dev_addr[i] = bytes[i];
+        eth_hw_addr_set(self->dev, bytes);
 	}
 }
 

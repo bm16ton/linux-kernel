@@ -415,7 +415,7 @@ spidev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				tmp |= SPI_CS_HIGH;
 
 			tmp |= spi->mode & ~SPI_MODE_MASK;
-			spi->mode = (u16)tmp;
+			spi->mode = tmp & SPI_MODE_USER_MASK;
 			retval = spi_setup(spi);
 			if (retval < 0)
 				spi->mode = save;
@@ -682,7 +682,6 @@ static const struct spi_device_id spidev_spi_ids[] = {
 	{ .name = "m53cpld" },
 	{ .name = "spi-petra" },
 	{ .name = "spi-authenta" },
-	{ .name = "spidev" },
 	{},
 };
 MODULE_DEVICE_TABLE(spi, spidev_spi_ids);
@@ -697,7 +696,6 @@ static const struct of_device_id spidev_dt_ids[] = {
 	{ .compatible = "menlo,m53cpld" },
 	{ .compatible = "cisco,spi-petra" },
 	{ .compatible = "micron,spi-authenta" },
-	{ .compatible = "spidev" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, spidev_dt_ids);
@@ -753,9 +751,10 @@ static int spidev_probe(struct spi_device *spi)
 	 * compatible string, it is a Linux implementation thing
 	 * rather than a description of the hardware.
 	 */
-	WARN(spi->dev.of_node &&
-	     of_device_is_compatible(spi->dev.of_node, "spidev"),
-	     "%pOF: buggy DT: spidev listed directly in DT\n", spi->dev.of_node);
+	if (spi->dev.of_node && of_device_is_compatible(spi->dev.of_node, "spidev")) {
+		dev_err(&spi->dev, "spidev listed directly in DT is not supported\n");
+		return -EINVAL;
+	}
 
 	spidev_probe_acpi(spi);
 

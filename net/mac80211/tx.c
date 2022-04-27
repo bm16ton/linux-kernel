@@ -2044,7 +2044,6 @@ void ieee80211_xmit(struct ieee80211_sub_if_data *sdata,
 		}
 	}
 
-//	ieee80211_set_qos_hdr(sdata, skb);
         // Don't overwrite QoS header in monitor mode
         if (likely(info->control.vif->type != NL80211_IFTYPE_MONITOR)) {
             ieee80211_set_qos_hdr(sdata, skb);
@@ -3833,7 +3832,7 @@ struct ieee80211_txq *ieee80211_next_txq(struct ieee80211_hw *hw, u8 ac)
 {
 	struct ieee80211_local *local = hw_to_local(hw);
 	struct airtime_sched_info *air_sched;
-	u64 now = ktime_get_boottime_ns();
+	u64 now = ktime_get_coarse_boottime_ns();
 	struct ieee80211_txq *ret = NULL;
 	struct airtime_info *air_info;
 	struct txq_info *txqi = NULL;
@@ -3960,7 +3959,7 @@ void ieee80211_update_airtime_weight(struct ieee80211_local *local,
 	u64 weight_sum = 0;
 
 	if (unlikely(!now))
-		now = ktime_get_boottime_ns();
+		now = ktime_get_coarse_boottime_ns();
 
 	lockdep_assert_held(&air_sched->lock);
 
@@ -3986,7 +3985,7 @@ void ieee80211_schedule_txq(struct ieee80211_hw *hw,
 	struct ieee80211_local *local = hw_to_local(hw);
 	struct txq_info *txqi = to_txq_info(txq);
 	struct airtime_sched_info *air_sched;
-	u64 now = ktime_get_boottime_ns();
+	u64 now = ktime_get_coarse_boottime_ns();
 	struct airtime_info *air_info;
 	u8 ac = txq->ac;
 	bool was_active;
@@ -4044,7 +4043,7 @@ static void __ieee80211_unschedule_txq(struct ieee80211_hw *hw,
 
 	if (!purge)
 		airtime_set_active(air_sched, air_info,
-				   ktime_get_boottime_ns());
+				   ktime_get_coarse_boottime_ns());
 
 	rb_erase_cached(&txqi->schedule_order,
 			&air_sched->active_txqs);
@@ -4132,7 +4131,7 @@ bool ieee80211_txq_may_transmit(struct ieee80211_hw *hw,
 	if (RB_EMPTY_NODE(&txqi->schedule_order))
 		goto out;
 
-	now = ktime_get_boottime_ns();
+	now = ktime_get_coarse_boottime_ns();
 
 	/* Like in ieee80211_next_txq(), make sure the first station in the
 	 * scheduling order is eligible for transmission to avoid starvation.

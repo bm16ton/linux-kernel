@@ -83,7 +83,7 @@ u32 ieee80211_channel_to_freq_khz(int chan, enum nl80211_band band)
 	case NL80211_BAND_LC:
 		if (chan == 14)
 			return MHZ_TO_KHZ(2484);
-		else if (chan < 25)
+		else if (chan < 14)
 			return MHZ_TO_KHZ(2407 + chan * 5);
 		break;
 	case NL80211_BAND_5GHZ:
@@ -147,7 +147,7 @@ int ieee80211_freq_khz_to_channel(u32 freq)
 	/* see 802.11 17.3.8.3.2 and Annex J */
 	if (freq == 2484)
 		return 14;
-	else if (freq < 2532)
+	else if (freq < 2484)
 		return (freq - 2407) / 5;
 	else if (freq >= 4910 && freq <= 4980)
 		return (freq - 4000) / 5;

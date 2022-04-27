@@ -1,6 +1,9 @@
 Linux kernel 16ton
 ============
 
+last git commit log
+5.17-rc2 prepatced IRDA, irda sir rc, ssd1306 aux display, ath10k restrictions removed, kernel wifi restrictions removed, i2c hd 16x2 lcd better then stock kernels, stm32 usb to spidev,gpio, ftdi mpsse spi,i2c,gpio, ch341 usb to i2c,gpio i2c untested, qcom eud usb debugger, rtl 8812au and rtl 88x2bu drivers added restrictions removed added extra non std wifi channels to 8812au as a proof of concept for hams etc possibly its cousin the 88x2bu can as well, this ability is very rare in wifi cards usally the freq is limited via firmware, uhg if you use my config or simply include include/linux/firmware/regulatory.db in the build and disable crda then you wont have to patch your reg domain rules and can simply switch back to regukatory compliance by booting a diff kernel. the wii nunchuck has a mouse driver in here sumwhere, adafruits seesaw has a pwm/adc driver. Im sure more im not remembering.
+
 Added;
 
 spi/gpio/uio irq driver for f103 firmware; https://github.com/bm16ton/spi-tiny-usb-fork

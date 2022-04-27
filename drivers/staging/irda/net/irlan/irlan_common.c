@@ -228,12 +228,14 @@ static struct irlan_cb __init *irlan_open(__u32 saddr, __u32 daddr)
 		 * Since we are emulating an IrLAN sever we will have to
 		 * give ourself an ethernet address!
 		 */
-		dev->dev_addr[0] = 0x40;
-		dev->dev_addr[1] = 0x00;
-		dev->dev_addr[2] = 0x00;
-		dev->dev_addr[3] = 0x00;
-		get_random_bytes(dev->dev_addr+4, 1);
-		get_random_bytes(dev->dev_addr+5, 1);
+                char eth_addr[6];
+		eth_addr[0] = 0x40;
+		eth_addr[1] = 0x00;
+		eth_addr[2] = 0x00;
+		eth_addr[3] = 0x00;
+		get_random_bytes(eth_addr+4, 1);
+		get_random_bytes(eth_addr+5, 1);
+        eth_hw_addr_set(dev, eth_addr);
 	}
 
 	self->media = MEDIA_802_3;

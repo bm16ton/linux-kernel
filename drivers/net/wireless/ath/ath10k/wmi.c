@@ -2495,42 +2495,7 @@ int ath10k_wmi_event_mgmt_tx_bundle_compl(struct ath10k *ar, struct sk_buff *skb
 
 	return 0;
 }
-/*
-static inline enum nl80211_band phy_mode_to_band(u32 phy_mode, u32 channel)
-{
-	enum nl80211_band band;
 
-	switch (phy_mode) {
-	case MODE_11A:
-	case MODE_11NA_HT20:
-	case MODE_11NA_HT40:
-	case MODE_11AC_VHT20:
-	case MODE_11AC_VHT40:
-	case MODE_11AC_VHT80:
-		band = NL80211_BAND_5GHZ;
-	break;
-	case MODE_11B:
-		/* Hardware can Rx CCK rates on 5GHz. In that case phy_mode is
-		 * set to MODE_11B.
-		 */
-/*		if (channel < 1 || channel > 14) {
-			band = NL80211_BAND_5GHZ;
-			break;
-		}
-	case MODE_11G:
-	case MODE_11GONLY:
-	case MODE_11NG_HT20:
-	case MODE_11NG_HT40:
-	case MODE_11AC_VHT20_2G:
-	case MODE_11AC_VHT40_2G:
-	case MODE_11AC_VHT80_2G:
-	default:
-		band = NL80211_BAND_2GHZ;
-	}
-
-	return band;
-}
-*/
 int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 {
 	struct wmi_mgmt_rx_ev_arg arg = {};
@@ -2587,15 +2552,13 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 	} else if (channel >= 36 && channel <= ATH10K_MAX_5G_CHAN) {
 		status->band = NL80211_BAND_5GHZ;
 	} else {
-		// Shouldn't happen unless list of advertised channels to
-		// mac80211 has been changed.
-		//
+		/* Shouldn't happen unless list of advertised channels to
+		 * mac80211 has been changed.
+		 */
 		WARN_ON_ONCE(1);
 		dev_kfree_skb(skb);
 		return 0;
 	}
-	
-//	status->band = phy_mode_to_band(phy_mode, channel);
 
 	if (phy_mode == MODE_11B && status->band == NL80211_BAND_5GHZ)
 		ath10k_dbg(ar, ATH10K_DBG_MGMT, "wmi mgmt rx 11b (CCK) on 5GHz\n");
@@ -2648,8 +2611,35 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 		ath10k_mac_handle_beacon(ar, skb);
 
 	if (ieee80211_is_beacon(hdr->frame_control) ||
-	    ieee80211_is_probe_resp(hdr->frame_control))
+	    ieee80211_is_probe_resp(hdr->frame_control)) {
+		struct ieee80211_mgmt *mgmt = (void *)skb->data;
+		enum cfg80211_bss_frame_type ftype;
+		u8 *ies;
+		int ies_ch;
+
 		status->boottime_ns = ktime_get_boottime_ns();
+
+		if (!ar->scan_channel)
+			goto drop;
+
+		ies = mgmt->u.beacon.variable;
+
+		if (ieee80211_is_beacon(mgmt->frame_control))
+			ftype = CFG80211_BSS_FTYPE_BEACON;
+		else
+			ftype = CFG80211_BSS_FTYPE_PRESP;
+
+		ies_ch = cfg80211_get_ies_channel_number(mgmt->u.beacon.variable,
+							 skb_tail_pointer(skb) - ies,
+							 sband->band, ftype);
+
+		if (ies_ch > 0 && ies_ch != channel) {
+			ath10k_dbg(ar, ATH10K_DBG_MGMT,
+				   "channel mismatched ds channel %d scan channel %d\n",
+				   ies_ch, channel);
+			goto drop;
+		}
+	}
 
 	ath10k_dbg(ar, ATH10K_DBG_MGMT,
 		   "event mgmt rx skb %pK len %d ftype %02x stype %02x\n",
@@ -2663,6 +2653,10 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 
 	ieee80211_rx_ni(ar->hw, skb);
 
+	return 0;
+
+drop:
+	dev_kfree_skb(skb);
 	return 0;
 }
 

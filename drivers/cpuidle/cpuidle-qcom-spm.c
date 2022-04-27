@@ -107,16 +107,12 @@ static int spm_cpuidle_register(struct device *cpuidle_dev, int cpu)
 		return -ENODEV;
 
 	data = devm_kzalloc(cpuidle_dev, sizeof(*data), GFP_KERNEL);
-	if (!data) {
-		put_device(&pdev->dev);
+	if (!data)
 		return -ENOMEM;
-	}
 
 	data->spm = dev_get_drvdata(&pdev->dev);
-	if (!data->spm) {
-		put_device(&pdev->dev);
+	if (!data->spm)
 		return -EINVAL;
-	}
 
 	data->cpuidle_driver = qcom_spm_idle_driver;
 	data->cpuidle_driver.cpumask = (struct cpumask *)cpumask_of(cpu);

@@ -26,10 +26,10 @@
 #include <video/mipi_display.h>
 
 #define ILI9341_FRMCTR1		0xb1
+#define ILI9341_DISCTRL		0xb6
 #define ILI9341_ETMOD		0xb7
 
 #define ILI9341_PWCTRL1		0xc0
-#define ILI9341_DISCTRL		0xb6
 #define ILI9341_PWCTRL2		0xc1
 #define ILI9341_VMCTRL1		0xc5
 #define ILI9341_VMCTRL2		0xc7
@@ -252,7 +252,6 @@ static struct spi_driver ili9341_spi_driver = {
 };
 module_spi_driver(ili9341_spi_driver);
 
-MODULE_ALIAS("ili9341");
 MODULE_DESCRIPTION("Ilitek ILI9341 DRM driver");
 MODULE_AUTHOR("David Lechner <david@lechnology.com>");
 MODULE_LICENSE("GPL");

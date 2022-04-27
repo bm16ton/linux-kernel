@@ -1100,6 +1100,7 @@ int msm_ispif_subdev_init(struct camss *camss,
 	struct device *dev = camss->dev;
 	struct ispif_device *ispif = camss->ispif;
 	struct platform_device *pdev = to_platform_device(dev);
+	struct resource *r;
 	int i;
 	int ret;
 
@@ -1152,11 +1153,14 @@ int msm_ispif_subdev_init(struct camss *camss,
 
 	/* Interrupt */
 
-	ret = platform_get_irq_byname(pdev, res->interrupt);
-	if (ret < 0)
-		return ret;
+	r = platform_get_resource_byname(pdev, IORESOURCE_IRQ, res->interrupt);
 
-	ispif->irq = ret;
+	if (!r) {
+		dev_err(dev, "missing IRQ\n");
+		return -EINVAL;
+	}
+
+	ispif->irq = r->start;
 	snprintf(ispif->irq_name, sizeof(ispif->irq_name), "%s_%s",
 		 dev_name(dev), MSM_ISPIF_NAME);
 	if (camss->version == CAMSS_8x16)
