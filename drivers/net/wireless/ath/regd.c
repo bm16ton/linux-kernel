@@ -303,17 +303,6 @@ static void ath_force_no_ir_chan(struct ieee80211_channel *ch)
 	ch->flags |= IEEE80211_CHAN_NO_IR;
 }
 
-static void ath_force_no_ir_freq(struct wiphy *wiphy, u16 center_freq)
-{
-	struct ieee80211_channel *ch;
-
-	ch = ieee80211_get_channel(wiphy, center_freq);
-	if (!ch)
-		return;
-
-	ath_force_no_ir_chan(ch);
-}
-
 static void
 __ath_reg_apply_beaconing_flags(struct wiphy *wiphy,
 				struct ath_regulatory *reg,

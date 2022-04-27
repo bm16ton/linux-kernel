@@ -1364,9 +1364,9 @@ static int ft232h_intf_fpp_remove(struct usb_interface *intf)
 
 
 static struct dev_io_desc_data ftdi_spi_bus_dev_io[] = {
-	{ "dc", 1, GPIO_ACTIVE_HIGH },
-	{ "reset", 2, GPIO_ACTIVE_HIGH },
-	{ "interrupts", 3, GPIO_ACTIVE_HIGH },
+	{ "USB-dc", 1, GPIO_ACTIVE_HIGH },
+	{ "USB-reset", 2, GPIO_ACTIVE_HIGH },
+	{ "USB-interrupts", 3, GPIO_ACTIVE_HIGH },
 };
 
 static const struct mpsse_spi_dev_data ftdi_spi_dev_data[] = {
