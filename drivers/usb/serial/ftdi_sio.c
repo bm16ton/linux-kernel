@@ -92,6 +92,7 @@ struct ftdi_sio_quirk {
 };
 
 static int   ftdi_jtag_probe(struct usb_serial *serial);
+static int   ft4232_jtag_probe(struct usb_serial *serial);
 static int   ftdi_NDI_device_setup(struct usb_serial *serial);
 static int   ftdi_stmclite_probe(struct usb_serial *serial);
 static int   ftdi_8u2232c_probe(struct usb_serial *serial);
@@ -100,6 +101,10 @@ static void  ftdi_HE_TIRA1_setup(struct ftdi_private *priv);
 
 static const struct ftdi_sio_quirk ftdi_jtag_quirk = {
 	.probe	= ftdi_jtag_probe,
+};
+
+static const struct ftdi_sio_quirk ft4232_jtag_quirk = {
+	.probe	= ft4232_jtag_probe,
 };
 
 static const struct ftdi_sio_quirk ftdi_NDI_device_quirk = {
@@ -121,6 +126,14 @@ static const struct ftdi_sio_quirk ftdi_stmclite_quirk = {
 static const struct ftdi_sio_quirk ftdi_8u2232c_quirk = {
 	.probe	= ftdi_8u2232c_probe,
 };
+
+int sio_dont_ignore;
+module_param_named(dont_ignore, sio_dont_ignore, int, 0444);
+MODULE_PARM_DESC(dont_ignore, "Dont ignore ftdi's with 16ton product");
+
+int bind232h;
+module_param(bind232h, int, S_IRUSR | S_IWUSR);
+MODULE_PARM_DESC(bind232h, "bind to 232h 16ton");
 
 /*
  * The 8U232AM has the same API as the sio except for:
@@ -177,8 +190,14 @@ static const struct usb_device_id id_table_combined[] = {
 	{ USB_DEVICE(FTDI_VID, FTDI_232RL_PID) },
 	{ USB_DEVICE(FTDI_VID, FTDI_8U2232C_PID) ,
 		.driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
-	{ USB_DEVICE(FTDI_VID, FTDI_4232H_PID) },
-	{ USB_DEVICE(FTDI_VID, FTDI_232H_PID) },
+	{ USB_DEVICE(FTDI_VID, FTDI_2232H_PID) ,
+	    .driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
+	{ USB_DEVICE(FTDI_VID, FTDI_4232H_PID) ,
+	    .driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
+	{ USB_DEVICE(FTDI_VID, FTDI_4233HPQ_PID) ,
+	    .driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
+	{ USB_DEVICE(FTDI_VID, FTDI_232H_PID) ,
+	    .driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
 	{ USB_DEVICE(FTDI_VID, FTDI_FTX_PID) },
 	{ USB_DEVICE(FTDI_VID, FTDI_MICRO_CHAMELEON_PID) },
 	{ USB_DEVICE(FTDI_VID, FTDI_RELAIS_PID) },
@@ -1050,6 +1069,15 @@ static const struct usb_device_id id_table_combined[] = {
 		.driver_info = (kernel_ulong_t)&ftdi_jtag_quirk },
 	{ USB_DEVICE(FTDI_VID, FTDI_FALCONIA_JTAG_UNBUF_PID),
 		.driver_info = (kernel_ulong_t)&ftdi_jtag_quirk },
+	/* 16ton i2c spi */
+	{ USB_DEVICE(FTDI_VID, FTDI_232H_PID),
+		.driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
+	{ USB_DEVICE(FTDI_VID, FTDI_4232H_PID),
+		.driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
+	{ USB_DEVICE(FTDI_VID, FTDI_2232H_PID),
+		.driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
+	{ USB_DEVICE(FTDI_VID, FTDI_4233HPQ_PID),
+		.driver_info = (kernel_ulong_t)&ftdi_8u2232c_quirk },
 	{ }					/* Terminating entry */
 };
 
@@ -1064,7 +1092,8 @@ static const char *ftdi_chip_name[] = {
 	[FT2232H] = "FT2232H",
 	[FT4232H] = "FT4232H",
 	[FT232H]  = "FT232H",
-	[FTX]     = "FT-X"
+	[FTX]     = "FT-X",
+	[FT4233HPQ] = "FT4233HPQ"
 };
 
 
@@ -1358,6 +1387,7 @@ static u32 get_ftdi_divisor(struct tty_struct *tty,
 		break;
 	case FT2232H: /* FT2232H chip */
 	case FT4232H: /* FT4232H chip */
+	case FT4233HPQ: /* FT4232H chip */
 	case FT232H:  /* FT232H chip */
 		if ((baud <= 12000000) && (baud >= 1200)) {
 			div_value = ftdi_2232h_baud_to_divisor(baud);
@@ -1394,7 +1424,7 @@ static int change_speed(struct tty_struct *tty, struct usb_serial_port *port)
 	value = (u16)index_value;
 	index = (u16)(index_value >> 16);
 	if (priv->chip_type == FT2232C || priv->chip_type == FT2232H ||
-			priv->chip_type == FT4232H || priv->chip_type == FT232H ||
+			priv->chip_type == FT4232H || priv->chip_type == FT232H || priv->chip_type == FT4233HPQ ||
 			priv->chip_type == FTX) {
 		/* Probably the BM type needs the MSB of the encoded fractional
 		 * divider also moved like for the chips above. Any infos? */
@@ -1555,7 +1585,11 @@ static void ftdi_determine_type(struct usb_serial_port *port)
 		int ifnum = intf->cur_altsetting->desc.bInterfaceNumber;
 
 		/* Multiple interfaces.*/
-		if (version == 0x0800) {
+		if (version == 0x2900) {
+			priv->chip_type = FT4233HPQ;
+			/* Hi-speed - baud clock runs at 120MHz */
+			priv->baud_base = 120000000 / 2;		
+		} else if (version == 0x0800) {
 			priv->chip_type = FT4232H;
 			/* Hi-speed - baud clock runs at 120MHz */
 			priv->baud_base = 120000000 / 2;
@@ -1742,6 +1776,7 @@ static int create_sysfs_attrs(struct usb_serial_port *port)
 		     priv->chip_type == FT232RL ||
 		     priv->chip_type == FT2232H ||
 		     priv->chip_type == FT4232H ||
+		     priv->chip_type == FT4233HPQ ||
 		     priv->chip_type == FT232H ||
 		     priv->chip_type == FTX)) {
 			retval = device_create_file(&port->dev,
@@ -2332,12 +2367,37 @@ static int ftdi_jtag_probe(struct usb_serial *serial)
 	return 0;
 }
 
+static int ft4232_jtag_probe(struct usb_serial *serial)
+{
+	struct usb_interface *intf = serial->interface;
+	int ifnum = intf->cur_altsetting->desc.bInterfaceNumber;
+
+	if (ifnum < 2) {
+		dev_info(&intf->dev, "Ignoring interface reserved for JTAG\n");
+		return -ENODEV;
+	}
+
+	return 0;
+}
+
 static int ftdi_8u2232c_probe(struct usb_serial *serial)
 {
 	struct usb_device *udev = serial->dev;
 
 	if (udev->manufacturer && !strcmp(udev->manufacturer, "CALAO Systems"))
 		return ftdi_jtag_probe(serial);
+    if (sio_dont_ignore == 1)
+        return 0;
+    if (bind232h) {
+	    if (udev->product && !strcmp(udev->product, "ft232H-16ton")) {
+	        return 0;
+	    }
+	}
+	if (udev->product && !strcmp(udev->product, "ft232H-16ton")) {
+	        return -ENODEV;
+	}
+    if (udev->product && (!strcmp(udev->product, "ft4232H-16ton") || !strcmp(udev->product, "ft2232H-16ton") || !strcmp(udev->product, "ft4233HPQ-16ton")  || !strcmp(udev->product, "ft232H-16ton") || !strcmp(udev->product, "ft232H-16ton-spi") || !strcmp(udev->product, "ft232H-16ton-i2c")))
+		return ft4232_jtag_probe(serial);
 
 	if (udev->product &&
 		(!strcmp(udev->product, "Arrow USB Blaster") ||
