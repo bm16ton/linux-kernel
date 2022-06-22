@@ -17,6 +17,11 @@
 #include <linux/delay.h>
 #include <video/mipi_display.h>
 
+#include <linux/spi/spi.h>
+
+#include <linux/gpio/consumer.h>
+#include <linux/property.h>
+
 #include "fbtft.h"
 
 #define DRVNAME		"fb_ili9341"
@@ -144,6 +149,24 @@ static struct fbtft_display display = {
 		.set_gamma = set_gamma,
 	},
 };
+
+static const struct spi_device_id ili9341_spi_id[] = {
+	{ "ili9341", 0 },
+	{ "fb_ili9341", 0 },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(spi, ili9341_spi_id);
+
+static const struct of_device_id ili9341_of_spi_match[] = {
+//	{ "ilitek,ili9341", 0 },
+//	{ "ili9341", 0 },
+//	{ "fb_ili9341", 0 },
+	{ .compatible = "ilitek,fb_ili9341" },
+	{ .compatible = "ilitek,ili9341" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, ili9341_of_spi_match);
 
 FBTFT_REGISTER_DRIVER(DRVNAME, "ilitek,ili9341", &display);
 

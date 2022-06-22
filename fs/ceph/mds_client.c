@@ -555,6 +555,28 @@ bad:
 	return -EIO;
 }
 
+static int parse_reply_info_getvxattr(void **p, void *end,
+				      struct ceph_mds_reply_info_parsed *info,
+				      u64 features)
+{
+	u32 value_len;
+
+	ceph_decode_skip_8(p, end, bad); /* skip current version: 1 */
+	ceph_decode_skip_8(p, end, bad); /* skip first version: 1 */
+	ceph_decode_skip_32(p, end, bad); /* skip payload length */
+
+	ceph_decode_32_safe(p, end, value_len, bad);
+
+	if (value_len == end - *p) {
+	  info->xattr_info.xattr_value = *p;
+	  info->xattr_info.xattr_value_len = value_len;
+	  *p = end;
+	  return value_len;
+	}
+bad:
+	return -EIO;
+}
+
 /*
  * parse extra results
  */
@@ -570,6 +592,8 @@ static int parse_reply_info_extra(void **p, void *end,
 		return parse_reply_info_readdir(p, end, info, features);
 	else if (op == CEPH_MDS_OP_CREATE)
 		return parse_reply_info_create(p, end, info, features, s);
+	else if (op == CEPH_MDS_OP_GETVXATTR)
+		return parse_reply_info_getvxattr(p, end, info, features);
 	else
 		return -EIO;
 }
@@ -2178,7 +2202,8 @@ int ceph_alloc_readdir_reply_buffer(struct ceph_mds_request *req,
 	order = get_order(size * num_entries);
 	while (order >= 0) {
 		rinfo->dir_entries = (void*)__get_free_pages(GFP_KERNEL |
-							     __GFP_NOWARN,
+							     __GFP_NOWARN |
+							     __GFP_ZERO,
 							     order);
 		if (rinfo->dir_entries)
 			break;
@@ -2946,15 +2971,16 @@ int ceph_mdsc_submit_request(struct ceph_mds_client *mdsc, struct inode *dir,
 	return err;
 }
 
-static int ceph_mdsc_wait_request(struct ceph_mds_client *mdsc,
-				  struct ceph_mds_request *req)
+int ceph_mdsc_wait_request(struct ceph_mds_client *mdsc,
+			   struct ceph_mds_request *req,
+			   ceph_mds_request_wait_callback_t wait_func)
 {
 	int err;
 
 	/* wait */
 	dout("do_request waiting\n");
-	if (!req->r_timeout && req->r_wait_for_completion) {
-		err = req->r_wait_for_completion(mdsc, req);
+	if (wait_func) {
+		err = wait_func(mdsc, req);
 	} else {
 		long timeleft = wait_for_completion_killable_timeout(
 					&req->r_completion,
@@ -3011,7 +3037,7 @@ int ceph_mdsc_do_request(struct ceph_mds_client *mdsc,
 	/* issue */
 	err = ceph_mdsc_submit_request(mdsc, dir, req);
 	if (!err)
-		err = ceph_mdsc_wait_request(mdsc, req);
+		err = ceph_mdsc_wait_request(mdsc, req, NULL);
 	dout("do_request %p done, result %d\n", req, err);
 	return err;
 }
@@ -3096,35 +3122,6 @@ static void handle_reply(struct ceph_mds_session *session, struct ceph_msg *msg)
 	}
 
 	result = le32_to_cpu(head->result);
-
-	/*
-	 * Handle an ESTALE
-	 * if we're not talking to the authority, send to them
-	 * if the authority has changed while we weren't looking,
-	 * send to new authority
-	 * Otherwise we just have to return an ESTALE
-	 */
-	if (result == -ESTALE) {
-		dout("got ESTALE on request %llu\n", req->r_tid);
-		req->r_resend_mds = -1;
-		if (req->r_direct_mode != USE_AUTH_MDS) {
-			dout("not using auth, setting for that now\n");
-			req->r_direct_mode = USE_AUTH_MDS;
-			__do_request(mdsc, req);
-			mutex_unlock(&mdsc->mutex);
-			goto out;
-		} else  {
-			int mds = __choose_mds(mdsc, req, NULL);
-			if (mds >= 0 && mds != req->r_session->s_mds) {
-				dout("but auth changed, so resending\n");
-				__do_request(mdsc, req);
-				mutex_unlock(&mdsc->mutex);
-				goto out;
-			}
-		}
-		dout("have to return ESTALE on request %llu\n", req->r_tid);
-	}
-
 
 	if (head->safe) {
 		set_bit(CEPH_MDS_R_GOT_SAFE, &req->r_req_flags);
@@ -3378,13 +3375,17 @@ static void handle_session(struct ceph_mds_session *session,
 	}
 
 	if (msg_version >= 5) {
-		u32 flags;
-		/* version >= 4, struct_v, struct_cv, len, metric_spec */
-	        ceph_decode_skip_n(&p, end, 2 + sizeof(u32) * 2, bad);
+		u32 flags, len;
+
+		/* version >= 4 */
+		ceph_decode_skip_16(&p, end, bad); /* struct_v, struct_cv */
+		ceph_decode_32_safe(&p, end, len, bad); /* len */
+		ceph_decode_skip_n(&p, end, len, bad); /* metric_spec */
+
 		/* version >= 5, flags   */
-                ceph_decode_32_safe(&p, end, flags, bad);
+		ceph_decode_32_safe(&p, end, flags, bad);
 		if (flags & CEPH_SESSION_BLOCKLISTED) {
-		        pr_warn("mds%d session blocklisted\n", session->s_mds);
+			pr_warn("mds%d session blocklisted\n", session->s_mds);
 			blocklisted = true;
 		}
 	}
@@ -4437,8 +4438,6 @@ static void maybe_recover_session(struct ceph_mds_client *mdsc)
 
 bool check_session_state(struct ceph_mds_session *s)
 {
-	struct ceph_fs_client *fsc = s->s_mdsc->fsc;
-
 	switch (s->s_state) {
 	case CEPH_MDS_SESSION_OPEN:
 		if (s->s_ttl && time_after(jiffies, s->s_ttl)) {
@@ -4447,10 +4446,6 @@ bool check_session_state(struct ceph_mds_session *s)
 		}
 		break;
 	case CEPH_MDS_SESSION_CLOSING:
-		/* Should never reach this when not force unmounting */
-		WARN_ON_ONCE(s->s_ttl &&
-			     READ_ONCE(fsc->mount_state) != CEPH_MOUNT_SHUTDOWN);
-		fallthrough;
 	case CEPH_MDS_SESSION_NEW:
 	case CEPH_MDS_SESSION_RESTARTING:
 	case CEPH_MDS_SESSION_CLOSED:
@@ -4705,15 +4700,17 @@ void ceph_mdsc_pre_umount(struct ceph_mds_client *mdsc)
 }
 
 /*
- * wait for all write mds requests to flush.
+ * flush the mdlog and wait for all write mds requests to flush.
  */
-static void wait_unsafe_requests(struct ceph_mds_client *mdsc, u64 want_tid)
+static void flush_mdlog_and_wait_mdsc_unsafe_requests(struct ceph_mds_client *mdsc,
+						 u64 want_tid)
 {
 	struct ceph_mds_request *req = NULL, *nextreq;
+	struct ceph_mds_session *last_session = NULL;
 	struct rb_node *n;
 
 	mutex_lock(&mdsc->mutex);
-	dout("wait_unsafe_requests want %lld\n", want_tid);
+	dout("%s want %lld\n", __func__, want_tid);
 restart:
 	req = __get_oldest_req(mdsc);
 	while (req && req->r_tid <= want_tid) {
@@ -4725,14 +4722,32 @@ restart:
 			nextreq = NULL;
 		if (req->r_op != CEPH_MDS_OP_SETFILELOCK &&
 		    (req->r_op & CEPH_MDS_OP_WRITE)) {
+			struct ceph_mds_session *s = req->r_session;
+
+			if (!s) {
+				req = nextreq;
+				continue;
+			}
+
 			/* write op */
 			ceph_mdsc_get_request(req);
 			if (nextreq)
 				ceph_mdsc_get_request(nextreq);
+			s = ceph_get_mds_session(s);
 			mutex_unlock(&mdsc->mutex);
-			dout("wait_unsafe_requests  wait on %llu (want %llu)\n",
+
+			/* send flush mdlog request to MDS */
+			if (last_session != s) {
+				send_flush_mdlog(s);
+				ceph_put_mds_session(last_session);
+				last_session = s;
+			} else {
+				ceph_put_mds_session(s);
+			}
+			dout("%s wait on %llu (want %llu)\n", __func__,
 			     req->r_tid, want_tid);
 			wait_for_completion(&req->r_safe_completion);
+
 			mutex_lock(&mdsc->mutex);
 			ceph_mdsc_put_request(req);
 			if (!nextreq)
@@ -4747,7 +4762,8 @@ restart:
 		req = nextreq;
 	}
 	mutex_unlock(&mdsc->mutex);
-	dout("wait_unsafe_requests done\n");
+	ceph_put_mds_session(last_session);
+	dout("%s done\n", __func__);
 }
 
 void ceph_mdsc_sync(struct ceph_mds_client *mdsc)
@@ -4776,7 +4792,7 @@ void ceph_mdsc_sync(struct ceph_mds_client *mdsc)
 	dout("sync want tid %lld flush_seq %lld\n",
 	     want_tid, want_flush);
 
-	wait_unsafe_requests(mdsc, want_tid);
+	flush_mdlog_and_wait_mdsc_unsafe_requests(mdsc, want_tid);
 	wait_caps_flush(mdsc, want_flush);
 }
 
@@ -4841,7 +4857,7 @@ void ceph_mdsc_close_sessions(struct ceph_mds_client *mdsc)
 	mutex_unlock(&mdsc->mutex);
 
 	ceph_cleanup_snapid_map(mdsc);
-	ceph_cleanup_empty_realms(mdsc);
+	ceph_cleanup_global_and_empty_realms(mdsc);
 
 	cancel_work_sync(&mdsc->cap_reclaim_work);
 	cancel_delayed_work_sync(&mdsc->delayed_work); /* cancel timer */

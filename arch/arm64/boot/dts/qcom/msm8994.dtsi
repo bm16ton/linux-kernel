@@ -183,8 +183,8 @@
 			no-map;
 		};
 
-		cont_splash_mem: memory@3800000 {
-			reg = <0 0x03800000 0 0x2400000>;
+		cont_splash_mem: memory@3401000 {
+			reg = <0 0x03401000 0 0x2200000>;
 			no-map;
 		};
 
@@ -444,7 +444,7 @@
 		};
 
 		sdhc1: sdhci@f9824900 {
-			compatible = "qcom,sdhci-msm-v4";
+			compatible = "qcom,msm8994-sdhci", "qcom,sdhci-msm-v4";
 			reg = <0xf9824900 0x1a0>, <0xf9824000 0x800>;
 			reg-names = "hc_mem", "core_mem";
 
@@ -467,7 +467,7 @@
 		};
 
 		sdhc2: sdhci@f98a4900 {
-			compatible = "qcom,sdhci-msm-v4";
+			compatible = "qcom,msm8994-sdhci", "qcom,sdhci-msm-v4";
 			reg = <0xf98a4900 0x11c>, <0xf98a4000 0x800>;
 			reg-names = "hc_mem", "core_mem";
 
@@ -498,7 +498,7 @@
 			#dma-cells = <1>;
 			qcom,ee = <0>;
 			qcom,controlled-remotely;
-			num-channels = <18>;
+			num-channels = <24>;
 			qcom,num-ees = <4>;
 		};
 
@@ -634,7 +634,7 @@
 			#dma-cells = <1>;
 			qcom,ee = <0>;
 			qcom,controlled-remotely;
-			num-channels = <18>;
+			num-channels = <24>;
 			qcom,num-ees = <4>;
 		};
 
@@ -713,6 +713,9 @@
 			#reset-cells = <1>;
 			#power-domain-cells = <1>;
 			reg = <0xfc400000 0x2000>;
+
+			clock-names = "xo", "sleep_clk";
+			clocks = <&xo_board>, <&sleep_clk>;
 		};
 
 		rpm_msg_ram: sram@fc428000 {

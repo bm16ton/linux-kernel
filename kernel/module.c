@@ -335,7 +335,7 @@ static inline void add_taint_module(struct module *mod, unsigned flag,
 
 /*
  * A thread that wants to hold a reference to a module only while it
- * is running can call this to safely exit.  nfsd and lockd use this.
+ * is running can call this to safely exit.
  */
 void __noreturn __module_put_and_kthread_exit(struct module *mod, long code)
 {
@@ -3033,6 +3033,10 @@ static int elf_validity_check(struct load_info *info)
 	 * strings in the section safe.
 	 */
 	info->secstrings = (void *)info->hdr + strhdr->sh_offset;
+	if (strhdr->sh_size == 0) {
+		pr_err("empty section name table\n");
+		goto no_exec;
+	}
 	if (info->secstrings[strhdr->sh_size - 1] != '\0') {
 		pr_err("ELF Spec violation: section name table isn't null terminated\n");
 		goto no_exec;

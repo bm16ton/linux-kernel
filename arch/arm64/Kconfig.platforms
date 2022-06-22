@@ -253,6 +253,7 @@ config ARCH_INTEL_SOCFPGA
 
 config ARCH_SYNQUACER
 	bool "Socionext SynQuacer SoC Family"
+	select IRQ_FASTEOI_HIERARCHY_HANDLERS
 
 config ARCH_TEGRA
 	bool "NVIDIA Tegra SoC Family"
@@ -267,6 +268,12 @@ config ARCH_TEGRA
 	select RESET_CONTROLLER
 	help
 	  This enables support for the NVIDIA Tegra SoC family.
+
+config ARCH_TESLA_FSD
+	bool "ARMv8 based Tesla platform"
+	depends on ARCH_EXYNOS
+	help
+	  Support for ARMv8 based Tesla platforms.
 
 config ARCH_SPRD
 	bool "Spreadtrum SoC platform"
@@ -308,9 +315,6 @@ config ARCH_VISCONTI
 	select PINCTRL_VISCONTI
 	help
 	  This enables support for Toshiba Visconti SoCs Family.
-
-config ARCH_VULCAN
-	def_bool n
 
 config ARCH_XGENE
 	bool "AppliedMicro X-Gene SOC Family"

@@ -648,8 +648,8 @@ void __init early_init_fdt_scan_reserved_mem(void)
 	}
 
 	fdt_scan_reserved_mem();
-	fdt_init_reserved_mem();
 	fdt_reserve_elfcorehdr();
+	fdt_init_reserved_mem();
 }
 
 /**
@@ -1103,6 +1103,9 @@ int __init early_init_dt_scan_memory(void)
 
 		/* We are scanning "memory" nodes only */
 		if (type == NULL || strcmp(type, "memory") != 0)
+			continue;
+
+		if (!of_fdt_device_is_available(fdt, node))
 			continue;
 
 		reg = of_get_flat_dt_prop(node, "linux,usable-memory", &l);

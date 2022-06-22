@@ -16,6 +16,8 @@
 #include <linux/mempool.h>
 #include <linux/workqueue.h>
 #include <linux/utsname.h>
+#include <linux/sched/mm.h>
+#include <linux/netfs.h>
 #include "cifs_fs_sb.h"
 #include "cifsacl.h"
 #include <crypto/internal/hash.h>
@@ -115,10 +117,18 @@ enum statusEnum {
 	CifsInNegotiate,
 	CifsNeedSessSetup,
 	CifsInSessSetup,
-	CifsNeedTcon,
-	CifsInTcon,
-	CifsNeedFilesInvalidate,
-	CifsInFilesInvalidate
+};
+
+/* associated with each tree connection to the server */
+enum tid_status_enum {
+	TID_NEW = 0,
+	TID_GOOD,
+	TID_EXITING,
+	TID_NEED_RECON,
+	TID_NEED_TCON,
+	TID_IN_TCON,
+	TID_NEED_FILES_INVALIDATE, /* currently unused */
+	TID_IN_FILES_INVALIDATE
 };
 
 enum securityEnum {
@@ -612,7 +622,8 @@ struct TCP_Server_Info {
 	unsigned int in_flight;  /* number of requests on the wire to server */
 	unsigned int max_in_flight; /* max number of requests that were on wire */
 	spinlock_t req_lock;  /* protect the two values above */
-	struct mutex srv_mutex;
+	struct mutex _srv_mutex;
+	unsigned int nofs_flag;
 	struct task_struct *tsk;
 	char server_GUID[16];
 	__u16 sec_mode;
@@ -726,6 +737,22 @@ struct TCP_Server_Info {
 	char *origin_fullpath, *leaf_fullpath, *current_fullpath;
 #endif
 };
+
+static inline void cifs_server_lock(struct TCP_Server_Info *server)
+{
+	unsigned int nofs_flag = memalloc_nofs_save();
+
+	mutex_lock(&server->_srv_mutex);
+	server->nofs_flag = nofs_flag;
+}
+
+static inline void cifs_server_unlock(struct TCP_Server_Info *server)
+{
+	unsigned int nofs_flag = server->nofs_flag;
+
+	mutex_unlock(&server->_srv_mutex);
+	memalloc_nofs_restore(nofs_flag);
+}
 
 struct cifs_credits {
 	unsigned int value;
@@ -852,13 +879,7 @@ compare_mid(__u16 mid, const struct smb_hdr *smb)
 #define CIFS_MAX_RFC1002_WSIZE ((1<<17) - 1 - sizeof(WRITE_REQ) + 4)
 #define CIFS_MAX_RFC1002_RSIZE ((1<<17) - 1 - sizeof(READ_RSP) + 4)
 
-/*
- * The default wsize is 1M. find_get_pages seems to return a maximum of 256
- * pages in a single call. With PAGE_SIZE == 4k, this means we can fill
- * a single wsize request with a single call.
- */
 #define CIFS_DEFAULT_IOSIZE (1024 * 1024)
-#define SMB3_DEFAULT_IOSIZE (4 * 1024 * 1024)
 
 /*
  * Windows only supports a max of 60kb reads and 65535 byte writes. Default to
@@ -941,7 +962,7 @@ struct cifs_ses {
 				   and after mount option parsing we fill it */
 	char *domainName;
 	char *password;
-	char *workstation_name;
+	char workstation_name[CIFS_MAX_WORKSTATION_LEN];
 	struct session_key auth_key;
 	struct ntlmssp_auth *ntlmssp; /* ciphertext, flags, server challenge */
 	enum securityEnum sectype; /* what security flavor was specified? */
@@ -1038,7 +1059,7 @@ struct cifs_tcon {
 	char *password;		/* for share-level security */
 	__u32 tid;		/* The 4 byte tree id */
 	__u16 Flags;		/* optional support bits */
-	enum statusEnum tidStatus;
+	enum tid_status_enum status;
 	atomic_t num_smbs_sent;
 	union {
 		struct {
@@ -1402,6 +1423,11 @@ void cifsFileInfo_put(struct cifsFileInfo *cifs_file);
  */
 
 struct cifsInodeInfo {
+	struct {
+		/* These must be contiguous */
+		struct inode	vfs_inode;	/* the VFS's inode record */
+		struct netfs_i_context netfs_ctx; /* Netfslib context */
+	};
 	bool can_cache_brlcks;
 	struct list_head llist;	/* locks helb by this inode */
 	/*
@@ -1432,10 +1458,6 @@ struct cifsInodeInfo {
 	u64  uniqueid;			/* server inode number */
 	u64  createtime;		/* creation time on server */
 	__u8 lease_key[SMB2_LEASE_KEY_SIZE];	/* lease key for this inode */
-#ifdef CONFIG_CIFS_FSCACHE
-	struct fscache_cookie *fscache;
-#endif
-	struct inode vfs_inode;
 	struct list_head deferred_closes; /* list of deferred closes */
 	spinlock_t deferred_lock; /* protection on deferred list */
 	bool lease_granted; /* Flag to indicate whether lease or oplock is granted. */
@@ -1907,11 +1929,13 @@ extern mempool_t *cifs_mid_poolp;
 
 /* Operations for different SMB versions */
 #define SMB1_VERSION_STRING	"1.0"
+#define SMB20_VERSION_STRING    "2.0"
+#ifdef CONFIG_CIFS_ALLOW_INSECURE_LEGACY
 extern struct smb_version_operations smb1_operations;
 extern struct smb_version_values smb1_values;
-#define SMB20_VERSION_STRING	"2.0"
 extern struct smb_version_operations smb20_operations;
 extern struct smb_version_values smb20_values;
+#endif /* CIFS_ALLOW_INSECURE_LEGACY */
 #define SMB21_VERSION_STRING	"2.1"
 extern struct smb_version_operations smb21_operations;
 extern struct smb_version_values smb21_values;
@@ -1973,6 +1997,19 @@ static inline bool cifs_is_referral_server(struct cifs_tcon *tcon,
 	 * MS-DFSC 2.2.4 RESP_GET_DFS_REFERRAL.
 	 */
 	return is_tcon_dfs(tcon) || (ref && (ref->flags & DFSREF_REFERRAL_SERVER));
+}
+
+static inline size_t ntlmssp_workstation_name_size(const struct cifs_ses *ses)
+{
+	if (WARN_ON_ONCE(!ses || !ses->server))
+		return 0;
+	/*
+	 * Make workstation name no more than 15 chars when using insecure dialects as some legacy
+	 * servers do require it during NTLMSSP.
+	 */
+	if (ses->server->dialect <= SMB20_PROT_ID)
+		return min_t(size_t, sizeof(ses->workstation_name), RFC1001_NAME_LEN_WITH_NULL);
+	return sizeof(ses->workstation_name);
 }
 
 #endif	/* _CIFS_GLOB_H */

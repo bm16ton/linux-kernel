@@ -51,9 +51,6 @@ MODULE_FIRMWARE("amdgpu/navi14_sdma1.bin");
 MODULE_FIRMWARE("amdgpu/navi12_sdma.bin");
 MODULE_FIRMWARE("amdgpu/navi12_sdma1.bin");
 
-MODULE_FIRMWARE("amdgpu/cyan_skillfish_sdma.bin");
-MODULE_FIRMWARE("amdgpu/cyan_skillfish_sdma1.bin");
-
 MODULE_FIRMWARE("amdgpu/cyan_skillfish2_sdma.bin");
 MODULE_FIRMWARE("amdgpu/cyan_skillfish2_sdma1.bin");
 
@@ -264,10 +261,7 @@ static int sdma_v5_0_init_microcode(struct amdgpu_device *adev)
 		chip_name = "navi12";
 		break;
 	case IP_VERSION(5, 0, 1):
-		if (adev->apu_flags & AMD_APU_IS_CYAN_SKILLFISH2)
-			chip_name = "cyan_skillfish2";
-		else
-			chip_name = "cyan_skillfish";
+		chip_name = "cyan_skillfish2";
 		break;
 	default:
 		BUG();
@@ -400,8 +394,8 @@ static void sdma_v5_0_ring_set_wptr(struct amdgpu_ring *ring)
 	if (ring->use_doorbell) {
 		DRM_DEBUG("Using doorbell -- "
 				"wptr_offs == 0x%08x "
-				"lower_32_bits(ring->wptr) << 2 == 0x%08x "
-				"upper_32_bits(ring->wptr) << 2 == 0x%08x\n",
+				"lower_32_bits(ring->wptr << 2) == 0x%08x "
+				"upper_32_bits(ring->wptr << 2) == 0x%08x\n",
 				ring->wptr_offs,
 				lower_32_bits(ring->wptr << 2),
 				upper_32_bits(ring->wptr << 2));
@@ -780,9 +774,9 @@ static int sdma_v5_0_gfx_resume(struct amdgpu_device *adev)
 
 		if (!amdgpu_sriov_vf(adev)) { /* only bare-metal use register write for wptr */
 			WREG32(sdma_v5_0_get_reg_offset(adev, i, mmSDMA0_GFX_RB_WPTR),
-			       lower_32_bits(ring->wptr) << 2);
+			       lower_32_bits(ring->wptr << 2));
 			WREG32(sdma_v5_0_get_reg_offset(adev, i, mmSDMA0_GFX_RB_WPTR_HI),
-			       upper_32_bits(ring->wptr) << 2);
+			       upper_32_bits(ring->wptr << 2));
 		}
 
 		doorbell = RREG32_SOC15_IP(GC, sdma_v5_0_get_reg_offset(adev, i, mmSDMA0_GFX_DOORBELL));
@@ -1696,6 +1690,7 @@ static const struct amdgpu_ring_funcs sdma_v5_0_ring_funcs = {
 	.align_mask = 0xf,
 	.nop = SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP),
 	.support_64bit_ptrs = true,
+	.secure_submission_supported = true,
 	.vmhub = AMDGPU_GFXHUB_0,
 	.get_rptr = sdma_v5_0_ring_get_rptr,
 	.get_wptr = sdma_v5_0_ring_get_wptr,

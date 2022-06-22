@@ -1,5 +1,5 @@
 What:		/sys/bus/platform/drivers/eud/.../enable
-Date:           January 2022
+Date:           February 2022
 Contact:        Souradeep Chowdhury <quic_schowdhu@quicinc.com>
 Description:
 		The Enable/Disable sysfs interface for Embedded

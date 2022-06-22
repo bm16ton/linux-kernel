@@ -9,19 +9,19 @@
 extern char *lkdtm_kernel_info;
 
 #define pr_expected_config(kconfig)				\
-{								\
+do {								\
 	if (IS_ENABLED(kconfig)) 				\
 		pr_err("Unexpected! This %s was built with " #kconfig "=y\n", \
 			lkdtm_kernel_info);			\
 	else							\
 		pr_warn("This is probably expected, since this %s was built *without* " #kconfig "=y\n", \
 			lkdtm_kernel_info);			\
-}
+} while (0)
 
 #ifndef MODULE
 int lkdtm_check_bool_cmdline(const char *param);
 #define pr_expected_config_param(kconfig, param)		\
-{								\
+do {								\
 	if (IS_ENABLED(kconfig)) {				\
 		switch (lkdtm_check_bool_cmdline(param)) {	\
 		case 0:						\
@@ -52,7 +52,7 @@ int lkdtm_check_bool_cmdline(const char *param);
 			break;					\
 		}						\
 	}							\
-}
+} while (0)
 #else
 #define pr_expected_config_param(kconfig, param) pr_expected_config(kconfig)
 #endif
@@ -106,6 +106,7 @@ void __init lkdtm_perms_init(void);
 void lkdtm_WRITE_RO(void);
 void lkdtm_WRITE_RO_AFTER_INIT(void);
 void lkdtm_WRITE_KERN(void);
+void lkdtm_WRITE_OPD(void);
 void lkdtm_EXEC_DATA(void);
 void lkdtm_EXEC_STACK(void);
 void lkdtm_EXEC_KMALLOC(void);

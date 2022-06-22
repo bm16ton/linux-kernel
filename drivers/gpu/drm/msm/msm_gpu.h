@@ -9,6 +9,7 @@
 
 #include <linux/adreno-smmu-priv.h>
 #include <linux/clk.h>
+#include <linux/devfreq.h>
 #include <linux/interconnect.h>
 #include <linux/pm_opp.h>
 #include <linux/regulator/consumer.h>
@@ -42,7 +43,10 @@ struct msm_gpu_config {
  *    + z180_gpu
  */
 struct msm_gpu_funcs {
-	int (*get_param)(struct msm_gpu *gpu, uint32_t param, uint64_t *value);
+	int (*get_param)(struct msm_gpu *gpu, struct msm_file_private *ctx,
+			 uint32_t param, uint64_t *value);
+	int (*set_param)(struct msm_gpu *gpu, struct msm_file_private *ctx,
+			 uint32_t param, uint64_t value);
 	int (*hw_init)(struct msm_gpu *gpu);
 	int (*pm_suspend)(struct msm_gpu *gpu);
 	int (*pm_resume)(struct msm_gpu *gpu);
@@ -59,7 +63,7 @@ struct msm_gpu_funcs {
 	/* for generation specific debugfs: */
 	void (*debugfs_init)(struct msm_gpu *gpu, struct drm_minor *minor);
 #endif
-	unsigned long (*gpu_busy)(struct msm_gpu *gpu);
+	u64 (*gpu_busy)(struct msm_gpu *gpu, unsigned long *out_sample_rate);
 	struct msm_gpu_state *(*gpu_state_get)(struct msm_gpu *gpu);
 	int (*gpu_state_put)(struct msm_gpu_state *state);
 	unsigned long (*gpu_get_freq)(struct msm_gpu *gpu);
@@ -103,11 +107,8 @@ struct msm_gpu_devfreq {
 	struct dev_pm_qos_request boost_freq;
 
 	/**
-	 * busy_cycles:
-	 *
-	 * Used by implementation of gpu->gpu_busy() to track the last
-	 * busy counter value, for calculating elapsed busy cycles since
-	 * last sampling period.
+	 * busy_cycles: Last busy counter value, for calculating elapsed busy
+	 * cycles since last sampling period.
 	 */
 	u64 busy_cycles;
 
@@ -116,6 +117,8 @@ struct msm_gpu_devfreq {
 
 	/** idle_time: Time of last transition to idle: */
 	ktime_t idle_time;
+
+	struct devfreq_dev_status average_status;
 
 	/**
 	 * idle_work:
@@ -155,6 +158,13 @@ struct msm_gpu {
 
 	struct msm_ringbuffer *rb[MSM_GPU_MAX_RINGS];
 	int nr_rings;
+
+	/**
+	 * sysprof_active:
+	 *
+	 * The count of contexts that have enabled system profiling.
+	 */
+	refcount_t sysprof_active;
 
 	/**
 	 * cur_ctx_seqno:
@@ -199,7 +209,10 @@ struct msm_gpu {
 	/* does gpu need hw_init? */
 	bool needs_hw_init;
 
-	/* number of GPU hangs (for all contexts) */
+	/**
+	 * global_faults: number of GPU hangs not attributed to a particular
+	 * address space
+	 */
 	int global_faults;
 
 	void __iomem *mmio;
@@ -322,6 +335,24 @@ struct msm_file_private {
 	struct msm_gem_address_space *aspace;
 	struct kref ref;
 	int seqno;
+
+	/**
+	 * sysprof:
+	 *
+	 * The value of MSM_PARAM_SYSPROF set by userspace.  This is
+	 * intended to be used by system profiling tools like Mesa's
+	 * pps-producer (perfetto), and restricted to CAP_SYS_ADMIN.
+	 *
+	 * Setting a value of 1 will preserve performance counters across
+	 * context switches.  Setting a value of 2 will in addition
+	 * suppress suspend.  (Performance counters lose state across
+	 * power collapse, which is undesirable for profiling in some
+	 * cases.)
+	 *
+	 * The value automatically reverts to zero when the drm device
+	 * file is closed.
+	 */
+	int sysprof;
 
 	/**
 	 * entities:
@@ -519,6 +550,8 @@ void msm_submitqueue_close(struct msm_file_private *ctx);
 
 void msm_submitqueue_destroy(struct kref *kref);
 
+int msm_file_private_set_sysprof(struct msm_file_private *ctx,
+				 struct msm_gpu *gpu, int sysprof);
 void __msm_file_private_destroy(struct kref *kref);
 
 static inline void msm_file_private_put(struct msm_file_private *ctx)

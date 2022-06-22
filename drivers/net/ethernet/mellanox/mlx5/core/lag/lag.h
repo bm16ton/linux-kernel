@@ -28,6 +28,7 @@ enum {
 struct lag_func {
 	struct mlx5_core_dev *dev;
 	struct net_device    *netdev;
+	bool has_drop;
 };
 
 /* Used for collection of netdev event info. */
@@ -35,6 +36,7 @@ struct lag_tracker {
 	enum   netdev_lag_tx_type           tx_type;
 	struct netdev_lag_lower_state_info  netdev_state[MLX5_MAX_PORTS];
 	unsigned int is_bonded:1;
+	unsigned int has_inactive:1;
 	enum netdev_lag_hash hash_type;
 };
 
@@ -55,6 +57,16 @@ struct mlx5_lag {
 	struct lag_mp             lag_mp;
 	struct mlx5_lag_port_sel  port_sel;
 };
+
+static inline bool mlx5_is_lag_supported(struct mlx5_core_dev *dev)
+{
+	if (!MLX5_CAP_GEN(dev, vport_group_manager) ||
+	    !MLX5_CAP_GEN(dev, lag_master) ||
+	    MLX5_CAP_GEN(dev, num_lag_ports) < 2 ||
+	    MLX5_CAP_GEN(dev, num_lag_ports) > MLX5_MAX_PORTS)
+		return false;
+	return true;
+}
 
 static inline struct mlx5_lag *
 mlx5_lag_dev(struct mlx5_core_dev *dev)

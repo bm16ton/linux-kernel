@@ -829,7 +829,7 @@ config FB_PVR2
 	  You can pass several parameters to the driver at boot time or at
 	  module load time.  The parameters look like "video=pvr2:XXX", where
 	  the meaning of XXX can be found at the end of the main source file
-	  (<file:drivers/video/pvr2fb.c>). Please see the file
+	  (<file:drivers/video/fbdev/pvr2fb.c>). Please see the file
 	  <file:Documentation/fb/pvr2fb.rst>.
 
 config FB_OPENCORES
@@ -2043,23 +2043,6 @@ config FB_DA8XX
 	  This is the frame buffer device driver for the TI LCD controller
 	  found on DA8xx/OMAP-L1xx/AM335x SoCs.
 	  If unsure, say N.
-
-config FB_DPF
-	tristate "USB digital photo frames"
-	depends on FB
-	select FB_MODE_HELPERS
-	select FB_SYS_FILLRECT
-	select FB_SYS_COPYAREA
-	select FB_SYS_IMAGEBLIT
-	select FB_SYS_FOPS
-	select FB_DEFERRED_IO
-	help
-	  Currently only mini DPF's based on ax206 chipsets and the Samsung
-	  SPF-8(X) series are supported. the ax206 requires custom firmware
-	  https://github.com/dreamlayers/dpf-ax and both require userland
-	  apps to handle the jpeg stuff. Since it uses the virtual framebuffer
-	  the moduole param  video=vfb is REQUIRED! Please see kernel 
-	  Documentation for more info
 
 config FB_VIRTUAL
 	tristate "Virtual Frame Buffer support (ONLY FOR TESTING!)"

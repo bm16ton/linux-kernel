@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2010-2013 Felix Fietkau <nbd@openwrt.org>
- * Copyright (C) 2019-2020 Intel Corporation
+ * Copyright (C) 2019-2021 Intel Corporation
  */
 #include <linux/netdevice.h>
 #include <linux/types.h>
@@ -362,6 +362,9 @@ minstrel_ht_get_stats(struct minstrel_priv *mp, struct minstrel_ht_sta *mi,
 
 	group = MINSTREL_CCK_GROUP;
 	for (idx = 0; idx < ARRAY_SIZE(mp->cck_rates); idx++) {
+		if (!(mi->supported[group] & BIT(idx)))
+			continue;
+
 		if (rate->idx != mp->cck_rates[idx])
 			continue;
 

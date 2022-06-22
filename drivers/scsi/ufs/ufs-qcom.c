@@ -641,12 +641,7 @@ static int ufs_qcom_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 			return err;
 	}
 
-	err = ufs_qcom_ice_resume(host);
-	if (err)
-		return err;
-
-	hba->is_sys_suspended = false;
-	return 0;
+	return ufs_qcom_ice_resume(host);
 }
 
 static void ufs_qcom_dev_ref_clk_ctrl(struct ufs_qcom_host *host, bool enable)
@@ -687,8 +682,11 @@ static void ufs_qcom_dev_ref_clk_ctrl(struct ufs_qcom_host *host, bool enable)
 
 		writel_relaxed(temp, host->dev_ref_clk_ctrl_mmio);
 
-		/* ensure that ref_clk is enabled/disabled before we return */
-		wmb();
+		/*
+		 * Make sure the write to ref_clk reaches the destination and
+		 * not stored in a Write Buffer (WB).
+		 */
+		readl(host->dev_ref_clk_ctrl_mmio);
 
 		/*
 		 * If we call hibern8 exit after this, we need to make sure that
@@ -957,18 +955,6 @@ static const struct reset_control_ops ufs_qcom_reset_ops = {
 	.deassert = ufs_qcom_reset_deassert,
 };
 
-#define	ANDROID_BOOT_DEV_MAX	30
-static char android_boot_dev[ANDROID_BOOT_DEV_MAX];
-
-#ifndef MODULE
-static int __init get_android_boot_dev(char *str)
-{
-	strlcpy(android_boot_dev, str, ANDROID_BOOT_DEV_MAX);
-	return 1;
-}
-__setup("androidboot.bootdevice=", get_android_boot_dev);
-#endif
-
 /**
  * ufs_qcom_init - bind phy with controller
  * @hba: host controller instance
@@ -987,9 +973,6 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 	struct ufs_qcom_host *host;
 	struct resource *res;
 	struct ufs_clk_info *clki;
-
-	if (strlen(android_boot_dev) && strcmp(android_boot_dev, dev_name(dev)))
-		return -ENODEV;
 
 	host = devm_kzalloc(dev, sizeof(*host), GFP_KERNEL);
 	if (!host) {

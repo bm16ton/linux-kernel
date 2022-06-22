@@ -31,41 +31,41 @@ fi
 
 scm_version()
 {
-#	local short
-#	short=false
+	local short
+	short=false
 
-#	cd "$srctree"
-#	if test -e .scmversion; then
-#		cat .scmversion
-#		return
-#	fi
-#	if test "$1" = "--short"; then
-#		short=true
-#	fi
+	cd "$srctree"
+	if test -e .scmversion; then
+		cat .scmversion
+		return
+	fi
+	if test "$1" = "--short"; then
+		short=true
+	fi
 
 	# Check for git and a git repo.
-#	if test -z "$(git rev-parse --show-cdup 2>/dev/null)" &&
-#	   head=$(git rev-parse --verify HEAD 2>/dev/null); then
+	if test -z "$(git rev-parse --show-cdup 2>/dev/null)" &&
+	   head=$(git rev-parse --verify HEAD 2>/dev/null); then
 
 		# If we are at a tagged commit (like "v2.6.30-rc6"), we ignore
 		# it, because this version is defined in the top level Makefile.
-#		if [ -z "$(git describe --exact-match 2>/dev/null)" ]; then
+		if [ -z "$(git describe --exact-match 2>/dev/null)" ]; then
 
 			# If only the short version is requested, don't bother
 			# running further git commands
-#			if $short; then
-#				echo ""
+			if $short; then
+				echo "+"
 				return
-#			fi
+			fi
 			# If we are past a tagged commit (like
 			# "v2.6.30-rc5-302-g72357d5"), we pretty print it.
-#			if atag="$(git describe 2>/dev/null)"; then
-#				echo "$atag" | awk -F- '{printf("-%05d", $(NF-1))}'
-#			fi
+			if atag="$(git describe 2>/dev/null)"; then
+				echo "$atag" | awk -F- '{printf("-%05d", $(NF-1))}'
+			fi
 
 			# Add -g and exactly 12 hex chars.
-#			printf '%s%s' -g "$(echo $head | cut -c1-12)"
-#		fi
+			printf '%s%s' -g "$(echo $head | cut -c1-12)"
+		fi
 
 		# Check for uncommitted changes.
 		# This script must avoid any write attempt to the source tree,
@@ -77,13 +77,13 @@ scm_version()
 		# it fails. Note that git-diff-index does not refresh the
 		# index, so it may give misleading results. See
 		# git-update-index(1), git-diff-index(1), and git-status(1).
-#		if {
-#			git --no-optional-locks status -uno --porcelain 2>/dev/null ||
-#			git diff-index --name-only HEAD
-#		} | read dummy; then
-#			printf '%s' -dirty
-#		fi
-#	fi
+		if {
+			git --no-optional-locks status -uno --porcelain 2>/dev/null ||
+			git diff-index --name-only HEAD
+		} | read dummy; then
+			printf '%s' -dirty
+		fi
+	fi
 }
 
 collect_files()
@@ -139,8 +139,7 @@ elif [ "${LOCALVERSION+set}" != "set" ]; then
 	# If the variable LOCALVERSION is set (including being set
 	# to an empty string), we don't want to append a plus sign.
 	scm=$(scm_version --short)
-#	res="$res${scm:++}"
-	res="$res$(scm_version)"
+	res="$res${scm:++}"
 fi
 
 echo "$res"

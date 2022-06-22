@@ -35,11 +35,15 @@ enum btrfs_discard_state {
  * the FS with empty chunks
  *
  * CHUNK_ALLOC_FORCE means it must try to allocate one
+ *
+ * CHUNK_ALLOC_FORCE_FOR_EXTENT like CHUNK_ALLOC_FORCE but called from
+ * find_free_extent() that also activaes the zone
  */
 enum btrfs_chunk_alloc_enum {
 	CHUNK_ALLOC_NO_FORCE,
 	CHUNK_ALLOC_LIMITED,
 	CHUNK_ALLOC_FORCE,
+	CHUNK_ALLOC_FORCE_FOR_EXTENT,
 };
 
 struct btrfs_caching_control {
@@ -68,6 +72,7 @@ struct btrfs_block_group {
 	u64 bytes_super;
 	u64 flags;
 	u64 cache_generation;
+	u64 global_root_id;
 
 	/*
 	 * If the free space extent count exceeds this number, convert the block
@@ -207,6 +212,8 @@ struct btrfs_block_group {
 	u64 meta_write_pointer;
 	struct map_lookup *physical_map;
 	struct list_head active_bg_list;
+	struct work_struct zone_finish_work;
+	struct extent_buffer *last_eb;
 };
 
 static inline u64 btrfs_block_group_end(struct btrfs_block_group *block_group)

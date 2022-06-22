@@ -80,7 +80,7 @@ static int smb_direct_max_fragmented_recv_size = 1024 * 1024;
 /*  The maximum single-message size which can be received */
 static int smb_direct_max_receive_size = 8192;
 
-static int smb_direct_max_read_write_size = 1048512;
+static int smb_direct_max_read_write_size = 524224;
 
 static int smb_direct_max_outstanding_rw_ops = 8;
 
@@ -211,7 +211,7 @@ struct smb_direct_rdma_rw_msg {
 	struct completion	*completion;
 	struct rdma_rw_ctx	rw_ctx;
 	struct sg_table		sgt;
-	struct scatterlist	sg_list[0];
+	struct scatterlist	sg_list[];
 };
 
 static inline int get_buf_page_count(void *buf, int size)
@@ -569,6 +569,7 @@ static void recv_done(struct ib_cq *cq, struct ib_wc *wc)
 		}
 		t->negotiation_requested = true;
 		t->full_packet_received = true;
+		t->status = SMB_DIRECT_CS_CONNECTED;
 		enqueue_reassembly(t, recvmsg, 0);
 		wake_up_interruptible(&t->wait_status);
 		break;

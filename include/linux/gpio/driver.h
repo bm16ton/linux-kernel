@@ -168,13 +168,16 @@ struct gpio_irq_chip {
 
 	/**
 	 * @parent_handler_data:
+	 *
+	 * If @per_parent_data is false, @parent_handler_data is a single
+	 * pointer used as the data associated with every parent interrupt.
+	 *
 	 * @parent_handler_data_array:
 	 *
-	 * Data associated, and passed to, the handler for the parent
-	 * interrupt. Can either be a single pointer if @per_parent_data
-	 * is false, or an array of @num_parents pointers otherwise.  If
-	 * @per_parent_data is true, @parent_handler_data_array cannot be
-	 * NULL.
+	 * If @per_parent_data is true, @parent_handler_data_array is
+	 * an array of @num_parents pointers, and is used to associate
+	 * different data for each parent. This cannot be NULL if
+	 * @per_parent_data is true.
 	 */
 	union {
 		void *parent_handler_data;
@@ -217,6 +220,15 @@ struct gpio_irq_chip {
 	 * sized array to be used as parent data.
 	 */
 	bool per_parent_data;
+
+	/**
+	 * @initialized:
+	 *
+	 * Flag to track GPIO chip irq member's initialization.
+	 * This flag will make sure GPIO chip irq members are not used
+	 * before they are initialized.
+	 */
+	bool initialized;
 
 	/**
 	 * @init_hw: optional routine to initialize hardware before
@@ -489,6 +501,18 @@ struct gpio_chip {
 	 */
 	int (*of_xlate)(struct gpio_chip *gc,
 			const struct of_phandle_args *gpiospec, u32 *flags);
+
+	/**
+	 * @of_gpio_ranges_fallback:
+	 *
+	 * Optional hook for the case that no gpio-ranges property is defined
+	 * within the device tree node "np" (usually DT before introduction
+	 * of gpio-ranges). So this callback is helpful to provide the
+	 * necessary backward compatibility for the pin ranges.
+	 */
+	int (*of_gpio_ranges_fallback)(struct gpio_chip *gc,
+				       struct device_node *np);
+
 #endif /* CONFIG_OF_GPIO */
 };
 

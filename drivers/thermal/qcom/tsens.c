@@ -19,7 +19,6 @@
 #include <linux/slab.h>
 #include <linux/thermal.h>
 #include "../thermal_hwmon.h"
-#include "../thermal_core.h"
 #include "tsens.h"
 
 /**
@@ -511,14 +510,10 @@ static irqreturn_t tsens_irq_thread(int irq, void *data)
 		spin_unlock_irqrestore(&priv->ul_lock, flags);
 
 		if (trigger) {
-			if (s->tzd->mode == THERMAL_DEVICE_ENABLED) {
-				dev_dbg(priv->dev, "[%u] %s: TZ update trigger (%d mC)\n",
-					hw_id, __func__, temp);
-				thermal_zone_device_update(s->tzd, THERMAL_EVENT_UNSPECIFIED);
-			} else {
-				dev_info_ratelimited(priv->dev, "[%u] %s: TZ update trigger (%d mC) skipped - zone disabled, operating outside of safety limits!\n",
-					hw_id, __func__, temp);
-			}
+			dev_dbg(priv->dev, "[%u] %s: TZ update trigger (%d mC)\n",
+				hw_id, __func__, temp);
+			thermal_zone_device_update(s->tzd,
+						   THERMAL_EVENT_UNSPECIFIED);
 		} else {
 			dev_dbg(priv->dev, "[%u] %s: no violation:  %d\n",
 				hw_id, __func__, temp);
@@ -1066,12 +1061,10 @@ static int tsens_register(struct tsens_priv *priv)
 		priv->sensor[i].tzd = tzd;
 		if (priv->ops->enable)
 			priv->ops->enable(priv, i);
-	
-	tzd->tzp->no_hwmon = false;
-    ret = thermal_add_hwmon_sysfs(tzd);
-    if (ret)
-    return ret;  
-           
+
+		if (devm_thermal_add_hwmon_sysfs(tzd))
+			dev_warn(priv->dev,
+				 "Failed to add hwmon sysfs attributes\n");
 	}
 
 	/* VER_0 require to set MIN and MAX THRESH

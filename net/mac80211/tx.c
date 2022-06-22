@@ -805,19 +805,11 @@ ieee80211_tx_h_sequence(struct ieee80211_tx_data *tx)
 
 	/*
 	 * Packet injection may want to control the sequence
-	 * number, so if an injected packet is found, skip
-	 * renumbering it. Also make the packet NO_ACK to avoid
-	 * excessive retries (ACKing and retrying should be
-	 * handled by the injecting application).
-	 * FIXME This may break hostapd and some other injectors.
-	 * This should be done using a radiotap flag.
+	 * number, if we have no matching interface then we
+	 * neither assign one ourselves nor ask the driver to.
 	 */
-	if (unlikely((info->flags & IEEE80211_TX_CTL_INJECTED) &&
-	   !(tx->sdata->u.mntr.flags & MONITOR_FLAG_COOK_FRAMES))) {
-		if (!ieee80211_has_morefrags(hdr->frame_control))
-			info->flags |= IEEE80211_TX_CTL_NO_ACK;
+	if (unlikely(info->control.vif->type == NL80211_IFTYPE_MONITOR))
 		return TX_CONTINUE;
-	}
 
 	if (unlikely(ieee80211_is_ctl(hdr->frame_control)))
 		return TX_CONTINUE;
@@ -2044,10 +2036,7 @@ void ieee80211_xmit(struct ieee80211_sub_if_data *sdata,
 		}
 	}
 
-        // Don't overwrite QoS header in monitor mode
-        if (likely(info->control.vif->type != NL80211_IFTYPE_MONITOR)) {
-            ieee80211_set_qos_hdr(sdata, skb);
-        }
+	ieee80211_set_qos_hdr(sdata, skb);
 	ieee80211_tx(sdata, sta, skb, false);
 }
 
@@ -5053,6 +5042,19 @@ ieee80211_beacon_get_finish(struct ieee80211_hw *hw,
 		       IEEE80211_TX_CTL_FIRST_FRAGMENT;
 }
 
+static void
+ieee80211_beacon_add_mbssid(struct sk_buff *skb, struct beacon_data *beacon)
+{
+	int i;
+
+	if (!beacon->mbssid_ies)
+		return;
+
+	for (i = 0; i < beacon->mbssid_ies->cnt; i++)
+		skb_put_data(skb, beacon->mbssid_ies->elem[i].data,
+			     beacon->mbssid_ies->elem[i].len);
+}
+
 static struct sk_buff *
 ieee80211_beacon_get_ap(struct ieee80211_hw *hw,
 			struct ieee80211_vif *vif,
@@ -5066,6 +5068,7 @@ ieee80211_beacon_get_ap(struct ieee80211_hw *hw,
 	struct ieee80211_if_ap *ap = &sdata->u.ap;
 	struct sk_buff *skb = NULL;
 	u16 csa_off_base = 0;
+	int mbssid_len;
 
 	if (beacon->cntdwn_counter_offsets[0]) {
 		if (!is_template)
@@ -5075,11 +5078,12 @@ ieee80211_beacon_get_ap(struct ieee80211_hw *hw,
 	}
 
 	/* headroom, head length,
-	 * tail length and maximum TIM length
+	 * tail length, maximum TIM length and multiple BSSID length
 	 */
+	mbssid_len = ieee80211_get_mbssid_beacon_len(beacon->mbssid_ies);
 	skb = dev_alloc_skb(local->tx_headroom + beacon->head_len +
 			    beacon->tail_len + 256 +
-			    local->hw.extra_beacon_tailroom);
+			    local->hw.extra_beacon_tailroom + mbssid_len);
 	if (!skb)
 		return NULL;
 
@@ -5092,6 +5096,11 @@ ieee80211_beacon_get_ap(struct ieee80211_hw *hw,
 		offs->tim_offset = beacon->head_len;
 		offs->tim_length = skb->len - beacon->head_len;
 		offs->cntdwn_counter_offs[0] = beacon->cntdwn_counter_offsets[0];
+
+		if (mbssid_len) {
+			ieee80211_beacon_add_mbssid(skb, beacon);
+			offs->mbssid_off = skb->len - mbssid_len;
+		}
 
 		/* for AP the csa offsets are from tail */
 		csa_off_base = skb->len;

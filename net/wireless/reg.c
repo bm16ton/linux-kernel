@@ -244,23 +244,34 @@ static const struct ieee80211_regdomain world_regdom = {
 	.alpha2 =  "00",
 	.reg_rules = {
 		/* IEEE 802.11b/g, channels 1..11 */
-		REG_RULE(2312-10, 2462+10, 40, 6, 30, 0),
+		REG_RULE(2412-10, 2462+10, 40, 6, 20, 0),
 		/* IEEE 802.11b/g, channels 12..13. */
-		REG_RULE(2467-10, 2472+10, 20, 6, 30, 0),
+		REG_RULE(2467-10, 2472+10, 20, 6, 20,
+			NL80211_RRF_NO_IR | NL80211_RRF_AUTO_BW),
 		/* IEEE 802.11 channel 14 - Only JP enables
 		 * this and for 802.11b only */
-		REG_RULE(2484-10, 2552+10, 20, 6, 30, 0),
+		REG_RULE(2484-10, 2484+10, 20, 6, 20,
+			NL80211_RRF_NO_IR |
+			NL80211_RRF_NO_OFDM),
 		/* IEEE 802.11a, channel 36..48 */
-		REG_RULE(5180-10, 5260+10, 80, 6, 30, 0),
+		REG_RULE(5180-10, 5240+10, 80, 6, 20,
+                        NL80211_RRF_NO_IR |
+                        NL80211_RRF_AUTO_BW),
 
 		/* IEEE 802.11a, channel 52..64 - DFS required */
-		REG_RULE(5260-10, 5320+10, 160, 6, 30, 0),
+		REG_RULE(5260-10, 5320+10, 80, 6, 20,
+			NL80211_RRF_NO_IR |
+			NL80211_RRF_AUTO_BW |
+			NL80211_RRF_DFS),
 
 		/* IEEE 802.11a, channel 100..144 - DFS required */
-		REG_RULE(5320-10, 5720+10, 160, 6, 30, 0),
+		REG_RULE(5500-10, 5720+10, 160, 6, 20,
+			NL80211_RRF_NO_IR |
+			NL80211_RRF_DFS),
 
 		/* IEEE 802.11a, channel 149..165 */
-		REG_RULE(5720-10, 6000+10, 160, 6, 30, 0),
+		REG_RULE(5745-10, 5825+10, 80, 6, 20,
+			NL80211_RRF_NO_IR),
 
 		/* IEEE 802.11ad (60GHz), channels 1..3 */
 		REG_RULE(56160+2160*1-1080, 56160+2160*3+1080, 2160, 0, 0, 0),
@@ -796,6 +807,8 @@ static int __init load_builtin_regdb_keys(void)
 	return 0;
 }
 
+MODULE_FIRMWARE("regulatory.db.p7s");
+
 static bool regdb_has_valid_signature(const u8 *data, unsigned int size)
 {
 	const struct firmware *sig;
@@ -1067,6 +1080,8 @@ static void regdb_fw_cb(const struct firmware *fw, void *context)
 	release_firmware(fw);
 }
 
+MODULE_FIRMWARE("regulatory.db");
+
 static int query_regdb_file(const char *alpha2)
 {
 	ASSERT_RTNL();
@@ -1227,6 +1242,8 @@ unsigned int reg_get_max_bandwidth(const struct ieee80211_regdomain *rd,
 {
 	unsigned int bw = reg_get_max_bandwidth_from_range(rd, rule);
 
+	if (rule->flags & NL80211_RRF_NO_320MHZ)
+		bw = min_t(unsigned int, bw, MHZ_TO_KHZ(160));
 	if (rule->flags & NL80211_RRF_NO_160MHZ)
 		bw = min_t(unsigned int, bw, MHZ_TO_KHZ(80));
 	if (rule->flags & NL80211_RRF_NO_80MHZ)
@@ -1600,6 +1617,8 @@ static u32 map_regdom_flags(u32 rd_flags)
 		channel_flags |= IEEE80211_CHAN_NO_160MHZ;
 	if (rd_flags & NL80211_RRF_NO_HE)
 		channel_flags |= IEEE80211_CHAN_NO_HE;
+	if (rd_flags & NL80211_RRF_NO_320MHZ)
+		channel_flags |= IEEE80211_CHAN_NO_320MHZ;
 	return channel_flags;
 }
 
@@ -1762,6 +1781,8 @@ static uint32_t reg_rule_to_chan_bw_flags(const struct ieee80211_regdomain *regd
 			bw_flags |= IEEE80211_CHAN_NO_80MHZ;
 		if (max_bandwidth_khz < MHZ_TO_KHZ(160))
 			bw_flags |= IEEE80211_CHAN_NO_160MHZ;
+		if (max_bandwidth_khz < MHZ_TO_KHZ(320))
+			bw_flags |= IEEE80211_CHAN_NO_320MHZ;
 	}
 	return bw_flags;
 }
@@ -2924,10 +2945,19 @@ bool reg_dfs_domain_same(struct wiphy *wiphy1, struct wiphy *wiphy2)
 static void reg_copy_dfs_chan_state(struct ieee80211_channel *dst_chan,
 				    struct ieee80211_channel *src_chan)
 {
+	if (!(dst_chan->flags & IEEE80211_CHAN_RADAR) ||
+	    !(src_chan->flags & IEEE80211_CHAN_RADAR))
+		return;
 
+	if (dst_chan->flags & IEEE80211_CHAN_DISABLED ||
+	    src_chan->flags & IEEE80211_CHAN_DISABLED)
+		return;
+
+	if (src_chan->center_freq == dst_chan->center_freq &&
+	    dst_chan->dfs_state == NL80211_DFS_USABLE) {
 		dst_chan->dfs_state = src_chan->dfs_state;
 		dst_chan->dfs_state_entered = src_chan->dfs_state_entered;
-
+	}
 }
 
 static void wiphy_share_dfs_chan_state(struct wiphy *dst_wiphy,
@@ -3307,8 +3337,6 @@ void regulatory_hint_country_ie(struct wiphy *wiphy, enum nl80211_band band,
 	enum environment_cap env = ENVIRON_ANY;
 	struct regulatory_request *request = NULL, *lr;
 
-//	return;
-
 	/* IE len must be evenly divisible by 2 */
 	if (country_ie_len & 0x01)
 		return;
@@ -3564,7 +3592,6 @@ void regulatory_hint_disconnect(void)
 	 * ignore IE from connected access point but clearance of beacon hints
 	 * is required when wiphy(s) supports beacon hints.
 	 */
-//	return;
 	if (is_wiphy_all_set_reg_flag(REGULATORY_COUNTRY_IE_IGNORE)) {
 		struct reg_beacon *reg_beacon, *btmp;
 
@@ -4103,7 +4130,7 @@ void wiphy_regulatory_deregister(struct wiphy *wiphy)
 int cfg80211_get_unii(int freq)
 {
 	/* UNII-1 */
-	if (freq >= 4920 && freq <= 5250)
+	if (freq >= 5150 && freq <= 5250)
 		return 0;
 
 	/* UNII-2A */
@@ -4119,7 +4146,7 @@ int cfg80211_get_unii(int freq)
 		return 3;
 
 	/* UNII-3 */
-	if (freq > 5725 && freq <= 6100)
+	if (freq > 5725 && freq <= 5825)
 		return 4;
 
 	/* UNII-5 */

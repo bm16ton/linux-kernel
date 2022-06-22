@@ -666,12 +666,16 @@ static void sifive_serial_set_termios(struct uart_port *port,
 	int rate;
 	char nstop;
 
-	if ((termios->c_cflag & CSIZE) != CS8)
+	if ((termios->c_cflag & CSIZE) != CS8) {
 		dev_err_once(ssp->port.dev, "only 8-bit words supported\n");
+		termios->c_cflag &= ~CSIZE;
+		termios->c_cflag |= CS8;
+	}
 	if (termios->c_iflag & (INPCK | PARMRK))
 		dev_err_once(ssp->port.dev, "parity checking not supported\n");
 	if (termios->c_iflag & BRKINT)
 		dev_err_once(ssp->port.dev, "BREAK detection not supported\n");
+	termios->c_iflag &= ~(INPCK|PARMRK|BRKINT);
 
 	/* Set number of stop bits */
 	nstop = (termios->c_cflag & CSTOPB) ? 2 : 1;
@@ -756,7 +760,7 @@ static void sifive_serial_poll_put_char(struct uart_port *port,
  */
 
 #ifdef CONFIG_SERIAL_EARLYCON
-static void early_sifive_serial_putc(struct uart_port *port, int c)
+static void early_sifive_serial_putc(struct uart_port *port, unsigned char c)
 {
 	while (__ssp_early_readl(port, SIFIVE_SERIAL_TXDATA_OFFS) &
 	       SIFIVE_SERIAL_TXDATA_FULL_MASK)
@@ -800,7 +804,7 @@ OF_EARLYCON_DECLARE(sifive, "sifive,fu540-c000-uart0",
 
 static struct sifive_serial_port *sifive_serial_console_ports[SIFIVE_SERIAL_MAX_PORTS];
 
-static void sifive_serial_console_putchar(struct uart_port *port, int ch)
+static void sifive_serial_console_putchar(struct uart_port *port, unsigned char ch)
 {
 	struct sifive_serial_port *ssp = port_to_sifive_serial_port(port);
 
@@ -998,7 +1002,7 @@ static int sifive_serial_probe(struct platform_device *pdev)
 	/* Set up clock divider */
 	ssp->clkin_rate = clk_get_rate(ssp->clk);
 	ssp->baud_rate = SIFIVE_DEFAULT_BAUD_RATE;
-	ssp->port.uartclk = ssp->baud_rate * 16;
+	ssp->port.uartclk = ssp->clkin_rate;
 	__ssp_update_div(ssp);
 
 	platform_set_drvdata(pdev, ssp);
